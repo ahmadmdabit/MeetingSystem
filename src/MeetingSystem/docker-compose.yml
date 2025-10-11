@@ -1,0 +1,137 @@
+# docker-compose.yml
+# Version specifies the file format. 3.8 is a modern, stable version.
+version: '3.8'
+
+# ------------------------------------------------------------------
+# Services: Defines the containers that make up the application.
+# ------------------------------------------------------------------
+services:
+  # ------------------------------------------------------------------
+  # MeetingSystem API Service
+  # ------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meetingsystem-api
+    restart: unless-stopped
+    ports:
+      # Expose port 8080 on the host, mapping to port 8080 inside the container.
+      - "8080:8080"
+    depends_on:
+      # Ensures the API only starts after its dependencies are healthy.
+      mssql:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Explicitly disable Globalization Invariant Mode.
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+      # Environment variables are injected from the .env file.
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      # Connection strings use the *service name* (e.g., 'mssql') as the host,
+      # which is resolved by Docker's internal DNS.
+      - ConnectionStrings__DefaultConnection=Server=${DK_SQL_SERVER};Database=${DK_SQL_DATABASE};User Id=${DK_SQL_USER_ID};Password=${DK_SQL_PASSWORD};TrustServerCertificate=True;
+      - Jwt__Key=${DK_JWT_KEY}
+      - Jwt__Issuer=${DK_JWT_ISSUER}
+      - Jwt__Audience=${DK_JWT_AUDIENCE}
+      - Minio__Endpoint=minio:9000
+      - Minio__AccessKey=${DK_MINIO_ROOT_USER}
+      - Minio__SecretKey=${DK_MINIO_ROOT_PASSWORD}
+      - Smtp__Host=smtp
+      - Smtp__Port=25
+    healthcheck:
+      # Periodically checks if the API is responsive.
+      # NOTE: This requires a /health endpoint to be added to the API.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ------------------------------------------------------------------
+  # MSSQL Database Service
+  # ------------------------------------------------------------------
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2017-latest
+    container_name: meetingsystem-mssql
+    restart: unless-stopped
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${DK_SQL_PASSWORD}
+    ports:
+      # Expose the standard SQL Server port to the host for external tools.
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      # Checks if the SQL Server is ready to accept connections.
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${DK_SQL_PASSWORD}", "-Q", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ------------------------------------------------------------------
+  # MinIO Object Storage Service
+  # ------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: meetingsystem-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${DK_MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${DK_MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000" # API endpoint
+      - "9001:9001" # Web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      # Checks the health of the MinIO service.
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ------------------------------------------------------------------
+  # MailHog Service (Fake SMTP Server & Email Viewer)
+  # ------------------------------------------------------------------
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: meetingsystem-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP port for the relay to connect to
+      - "8025:8025" # Web UI port for you to access
+
+  # ------------------------------------------------------------------
+  # Postfix SMTP Relay Service (Configured to use MailHog)
+  # ------------------------------------------------------------------
+  smtp:
+    image: juanluisbaptiste/postfix:latest
+    container_name: meetingsystem-smtp
+    restart: unless-stopped
+    environment:
+      # This is the critical change:
+      # We tell Postfix to relay all mail to the 'mailhog' service
+      # on its internal SMTP port (1025).
+      - SMTP_SERVER=mailhog
+      - SMTP_PORT=1025    
+      - SERVER_HOSTNAME=meetingsystem.local
+    ports:
+      # Expose port 2525 on the host for our API to connect to.
+      - "2525:25"
+    depends_on:
+      # Ensure mailhog is running before the smtp relay starts.
+      - mailhog
+
+# ------------------------------------------------------------------
+# Named Volumes: Defines persistent storage for stateful services.
+# ------------------------------------------------------------------
+volumes:
+  mssql-data:
+  minio-data:

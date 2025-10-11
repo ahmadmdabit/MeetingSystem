@@ -1,0 +1,23 @@
+# .dockerignore
+
+# Ignore git history
+.git
+.gitignore
+
+# Ignore IDE/Editor specific files
+.vs
+.vscode
+*.sln.DotSettings.user
+
+# Ignore build artifacts
+**/bin
+**/obj
+
+# Ignore local environment file
+.env
+
+# Ignore docker-compose files
+docker-compose*.yml
+
+# Ignore readme and other markdown files
+*.md
