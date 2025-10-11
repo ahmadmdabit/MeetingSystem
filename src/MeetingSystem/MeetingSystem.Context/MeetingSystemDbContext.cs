@@ -12,6 +12,8 @@ public class MeetingSystemDbContext : DbContext
     public MeetingSystemDbContext(DbContextOptions<MeetingSystemDbContext> options) : base(options) { }
 
     public DbSet<User> Users { get; set; }
+    public DbSet<Role> Roles { get; set; }
+    public DbSet<UserRole> UserRoles { get; set; }
     public DbSet<Meeting> Meetings { get; set; }
     public DbSet<MeetingFile> MeetingFiles { get; set; }
     public DbSet<MeetingParticipant> MeetingParticipants { get; set; }
@@ -35,6 +37,33 @@ public class MeetingSystemDbContext : DbContext
             entity.Property(u => u.LastName).HasMaxLength(100);
             entity.Property(u => u.Email).HasMaxLength(256);
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
+        });
+
+        // --- Role Configuration ---
+        modelBuilder.Entity<Role>(entity =>
+        {
+            entity.ToTable("Roles");
+            entity.HasIndex(r => r.Name).IsUnique(); // Role names must be unique
+            entity.Property(r => r.Name).HasMaxLength(256);
+        });
+
+        // --- UserRole Configuration ---
+        modelBuilder.Entity<UserRole>(entity =>
+        {
+            entity.ToTable("UserRoles");
+            entity.HasKey(ur => new { ur.UserId, ur.RoleId }); // Composite primary key
+
+            // Relationship to User
+            entity.HasOne(ur => ur.User)
+                .WithMany() // A User can have many UserRole entries
+                .HasForeignKey(ur => ur.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relationship to Role
+            entity.HasOne(ur => ur.Role)
+                .WithMany(r => r.UserRoles)
+                .HasForeignKey(ur => ur.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // --- Meeting Configuration ---

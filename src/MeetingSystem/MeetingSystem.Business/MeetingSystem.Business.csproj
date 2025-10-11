@@ -1,14 +1,21 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <ItemGroup>
-    <ProjectReference Include="..\MeetingSystem.Context\MeetingSystem.Context.csproj" />
-    <ProjectReference Include="..\MeetingSystem.Model\MeetingSystem.Model.csproj" />
-  </ItemGroup>
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\MeetingSystem.Context\MeetingSystem.Context.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Hangfire.SqlServer" Version="1.8.21" />
+		<PackageReference Include="MailKit" Version="4.14.0" />
+		<PackageReference Include="Microsoft.AspNetCore.Http.Features" Version="5.0.17" />
+		<PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.9" />
+		<PackageReference Include="Minio" Version="6.0.5" />
+	</ItemGroup>
 
 </Project>

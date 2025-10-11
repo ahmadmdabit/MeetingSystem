@@ -24,6 +24,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
     environment:
       # Explicitly disable Globalization Invariant Mode.
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
@@ -36,11 +38,21 @@ services:
       - Jwt__Key=${DK_JWT_KEY}
       - Jwt__Issuer=${DK_JWT_ISSUER}
       - Jwt__Audience=${DK_JWT_AUDIENCE}
-      - Minio__Endpoint=minio:9000
+      - Jwt__ExpiresIn=${DK_JWT_EXPIRESIN}
+      - Minio__Endpoint=${DK_MINIO_ENDPOINT}
       - Minio__AccessKey=${DK_MINIO_ROOT_USER}
       - Minio__SecretKey=${DK_MINIO_ROOT_PASSWORD}
-      - Smtp__Host=smtp
-      - Smtp__Port=25
+      - Minio__BucketName=${DK_MINIO_BUCKET_NAME}
+      - Minio__PublicEndpoint=${DK_MINIO_PUBLIC_ENDPOINT} # Public endpoint for generating URLs
+      - Minio__SSL=${DK_MINIO_SSL}
+      - Smtp__Host=${DK_SMTP_HOST}
+      - Smtp__Port=${DK_SMTP_PORT}
+      - Smtp__Username=${DK_SMTP_USERNAME}
+      - Smtp__Password=${DK_SMTP_PASSWORD}
+      - Smtp__FromAddress=${DK_SMTP_FROM_ADDRESS}
+      - Smtp__FromName=${DK_SMTP_FROM_NAME}
+      - Smtp__SSL=${DK_SMTP_SSL}
+      
     healthcheck:
       # Periodically checks if the API is responsive.
       # NOTE: This requires a /health endpoint to be added to the API.
@@ -98,36 +110,22 @@ services:
       start_period: 10s
 
   # ------------------------------------------------------------------
-  # MailHog Service (Fake SMTP Server & Email Viewer)
+  # MailPit Service (SMTP Server & Email Viewer)
   # ------------------------------------------------------------------
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: meetingsystem-mailhog
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: meetingsystem-mailpit
     restart: unless-stopped
     ports:
-      - "1025:1025" # SMTP port for the relay to connect to
-      - "8025:8025" # Web UI port for you to access
-
-  # ------------------------------------------------------------------
-  # Postfix SMTP Relay Service (Configured to use MailHog)
-  # ------------------------------------------------------------------
-  smtp:
-    image: juanluisbaptiste/postfix:latest
-    container_name: meetingsystem-smtp
-    restart: unless-stopped
-    environment:
-      # This is the critical change:
-      # We tell Postfix to relay all mail to the 'mailhog' service
-      # on its internal SMTP port (1025).
-      - SMTP_SERVER=mailhog
-      - SMTP_PORT=1025    
-      - SERVER_HOSTNAME=meetingsystem.local
-    ports:
-      # Expose port 2525 on the host for our API to connect to.
-      - "2525:25"
-    depends_on:
-      # Ensure mailhog is running before the smtp relay starts.
-      - mailhog
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI port
+    healthcheck:
+      # Mailpit has a built-in health check endpoint via its API
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 # ------------------------------------------------------------------
 # Named Volumes: Defines persistent storage for stateful services.
