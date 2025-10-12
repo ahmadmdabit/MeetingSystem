@@ -1,5 +1,6 @@
 ﻿using MeetingSystem.Model;
 
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace MeetingSystem.Context;
@@ -7,9 +8,14 @@ namespace MeetingSystem.Context;
 /// <summary>
 /// The Entity Framework Core database context for the MeetingSystem application.
 /// </summary>
-public class MeetingSystemDbContext : DbContext
+public class MeetingSystemDbContext : DbContext, IDataProtectionKeyContext
 {
     public MeetingSystemDbContext(DbContextOptions<MeetingSystemDbContext> options) : base(options) { }
+    
+    /// <summary>
+    /// Represents the collection of keys used by the ASP.NET Core Data Protection system.
+    /// </summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
     public DbSet<User> Users { get; set; }
     public DbSet<Role> Roles { get; set; }
@@ -28,7 +34,7 @@ public class MeetingSystemDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // --- User Configuration ---
+        // ...... User Configuration ......
         modelBuilder.Entity<User>(entity =>
         {
             entity.ToTable("Users");
@@ -39,7 +45,7 @@ public class MeetingSystemDbContext : DbContext
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
         });
 
-        // --- Role Configuration ---
+        // ...... Role Configuration ......
         modelBuilder.Entity<Role>(entity =>
         {
             entity.ToTable("Roles");
@@ -47,7 +53,7 @@ public class MeetingSystemDbContext : DbContext
             entity.Property(r => r.Name).HasMaxLength(256);
         });
 
-        // --- UserRole Configuration ---
+        // ...... UserRole Configuration ......
         modelBuilder.Entity<UserRole>(entity =>
         {
             entity.ToTable("UserRoles");
@@ -66,7 +72,7 @@ public class MeetingSystemDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // --- Meeting Configuration ---
+        // ...... Meeting Configuration ......
         modelBuilder.Entity<Meeting>(entity =>
         {
             entity.ToTable("Meetings");
@@ -80,7 +86,7 @@ public class MeetingSystemDbContext : DbContext
                   .OnDelete(DeleteBehavior.Restrict); // Prevent deleting a user if they organize meetings
         });
 
-        // --- MeetingParticipant (Many-to-Many Join Table) Configuration ---
+        // ...... MeetingParticipant (Many-to-Many Join Table) Configuration ......
         modelBuilder.Entity<MeetingParticipant>(entity =>
         {
             entity.ToTable("MeetingParticipants");
@@ -101,7 +107,7 @@ public class MeetingSystemDbContext : DbContext
             entity.Property(mp => mp.AddedAt).HasDefaultValueSql("GETUTCDATE()");
         });
 
-        // --- MeetingFile Configuration ---
+        // ...... MeetingFile Configuration ......
         modelBuilder.Entity<MeetingFile>(entity =>
         {
             entity.ToTable("MeetingFiles");
@@ -115,14 +121,14 @@ public class MeetingSystemDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade); // If a meeting is deleted, delete its files
         });
 
-        // --- MeetingsLog Configuration ---
+        // ...... MeetingsLog Configuration ......
         modelBuilder.Entity<MeetingsLog>(entity =>
         {
             entity.ToTable("LogMeetings");
             entity.Property(l => l.DeletedAt).HasDefaultValueSql("GETUTCDATE()");
         });
 
-        // --- RevokedToken Configuration ---
+        // ...... RevokedToken Configuration ......
         modelBuilder.Entity<RevokedToken>(entity =>
         {
             entity.ToTable("RevokedTokens");

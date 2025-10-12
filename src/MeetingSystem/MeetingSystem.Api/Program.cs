@@ -35,6 +35,7 @@ try
     // 3. Configure Application Services in the DI Container
     // ..........................................................................................
     // Using extension methods from the MeetingSystem.Api namespace to keep this file clean.
+    builder.Services.AddConfigurationServices(builder.Configuration);
     builder.Services.AddHttpContextAccessor();
     builder.Services.AddHangfireServices(builder.Configuration);
     builder.Services.AddMinioServices(builder.Configuration);

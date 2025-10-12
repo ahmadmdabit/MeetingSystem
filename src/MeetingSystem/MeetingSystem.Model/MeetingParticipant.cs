@@ -31,7 +31,7 @@ public class MeetingParticipant
     /// </summary>
     public DateTime AddedAt { get; set; }
 
-    // --- Navigation Properties ---
+    // ...... Navigation Properties ......
 
     /// <summary>
     /// The meeting associated with this participation record.

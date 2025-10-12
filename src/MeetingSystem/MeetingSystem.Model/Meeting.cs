@@ -60,7 +60,7 @@ public class Meeting
     /// </summary>
     public DateTime CreatedAt { get; set; }
 
-    // --- Navigation Properties ---
+    // ...... Navigation Properties ......
 
     /// <summary>
     /// The user who organized this meeting.

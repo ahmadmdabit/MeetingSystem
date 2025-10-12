@@ -1,7 +1,6 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
-using MailKit.Net.Smtp;
-using Microsoft.Extensions.Configuration;
+﻿using MailKit.Net.Smtp;
+using MeetingSystem.Business.Configuration;
+using Microsoft.Extensions.Options;
 using MimeKit;
 
 namespace MeetingSystem.Business;
@@ -12,7 +11,7 @@ namespace MeetingSystem.Business;
 public interface IEmailService
 {
     /// <summary>
-    /// Sends a welcome email to a newly registered user.
+    /// Sends a welcome email to a newly registered user using an HTML template.
     /// </summary>
     /// <param name="userEmail">The recipient's email address.</param>
     /// <param name="userName">The recipient's name for personalization.</param>
@@ -21,7 +20,7 @@ public interface IEmailService
     Task SendWelcomeEmailAsync(string userEmail, string userName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sends a reminder email for an upcoming meeting.
+    /// Sends a reminder email for an upcoming meeting using an HTML template.
     /// </summary>
     /// <param name="userEmail">The recipient's email address.</param>
     /// <param name="meetingName">The name of the meeting.</param>
@@ -29,61 +28,89 @@ public interface IEmailService
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task SendMeetingReminderAsync(string userEmail, string meetingName, DateTime meetingStart, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends an email with an HTML body and a single attachment.
+    /// </summary>
+    /// <param name="to">The recipient's email address.</param>
+    /// <param name="subject">The subject of the email.</param>
+    /// <param name="htmlBody">The HTML content of the email body.</param>
+    /// <param name="attachmentFileName">The name of the file to attach.</param>
+    /// <param name="attachmentStream">The stream containing the file's content.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task SendEmailWithAttachmentAsync(string to, string subject, string htmlBody, string attachmentFileName, Stream attachmentStream, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
-/// Implements the <see cref="IEmailService"/> using MailKit to send emails via an SMTP server.
+/// Implements the <see cref="IEmailService"/> using MailKit to send richly formatted HTML emails with attachments.
 /// </summary>
 public class EmailService : IEmailService
 {
-    private readonly IConfiguration _configuration;
+    private readonly SmtpSettings _smtpSettings;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="EmailService"/> class.
     /// </summary>
-    /// <param name="configuration">The application's configuration provider for accessing SMTP settings.</param>
-    public EmailService(IConfiguration configuration)
+    /// <param name="smtpSettings">The strongly-typed SMTP configuration options.</param>
+    public EmailService(IOptions<SmtpSettings> smtpSettings)
     {
-        _configuration = configuration;
+        _smtpSettings = smtpSettings.Value;
     }
 
     /// <inheritdoc />
-    public async Task SendWelcomeEmailAsync(string userEmail, string userName, CancellationToken cancellationToken = default)
+    public Task SendWelcomeEmailAsync(string userEmail, string userName, CancellationToken cancellationToken = default)
     {
         var subject = "Welcome to MeetingSystem!";
-        var body = $"Hi {userName},\n\nThank you for registering with MeetingSystem.";
-        await SendEmailAsync(userEmail, subject, body, cancellationToken).ConfigureAwait(false);
+        // In a real application, this HTML would be loaded from a Razor template, Scriban, or a file.
+        var htmlBody = $"<h1>Welcome, {userName}!</h1><p>Thank you for registering with MeetingSystem.</p>";
+        return SendHtmlEmailAsync(userEmail, subject, htmlBody, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task SendMeetingReminderAsync(string userEmail, string meetingName, DateTime meetingStart, CancellationToken cancellationToken = default)
+    public Task SendMeetingReminderAsync(string userEmail, string meetingName, DateTime meetingStart, CancellationToken cancellationToken = default)
     {
         var subject = $"Reminder: {meetingName}";
-        var body = $"This is a reminder that your meeting, '{meetingName}', is scheduled to start at {meetingStart:g} UTC.";
-        await SendEmailAsync(userEmail, subject, body, cancellationToken).ConfigureAwait(false);
+        var htmlBody = $"<p>This is a reminder that your meeting, '<b>{meetingName}</b>', is scheduled to start at {meetingStart:g} UTC.</p>";
+        return SendHtmlEmailAsync(userEmail, subject, htmlBody, cancellationToken);
     }
 
-    private async Task SendEmailAsync(string to, string subject, string body, CancellationToken cancellationToken = default)
+    /// <inheritdoc />
+    public Task SendEmailWithAttachmentAsync(string to, string subject, string htmlBody, string attachmentFileName, Stream attachmentStream, CancellationToken cancellationToken = default)
+    {
+        var bodyBuilder = new BodyBuilder { HtmlBody = htmlBody };
+        bodyBuilder.Attachments.Add(attachmentFileName, attachmentStream, cancellationToken);
+        
+        return SendEmailAsync(to, subject, bodyBuilder.ToMessageBody(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Constructs and sends an email with an HTML body.
+    /// </summary>
+    private Task SendHtmlEmailAsync(string to, string subject, string htmlBody, CancellationToken cancellationToken)
+    {
+        var bodyBuilder = new BodyBuilder { HtmlBody = htmlBody };
+        return SendEmailAsync(to, subject, bodyBuilder.ToMessageBody(), cancellationToken);
+    }
+
+    /// <summary>
+    /// The core method for constructing and sending an email using the configured SMTP settings.
+    /// </summary>
+    private async Task SendEmailAsync(string to, string subject, MimeEntity body, CancellationToken cancellationToken)
     {
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress(_configuration["Smtp:FromName"], _configuration["Smtp:FromAddress"]));
-        message.To.Add(new MailboxAddress("", to));
+        message.From.Add(new MailboxAddress(_smtpSettings.FromName, _smtpSettings.FromAddress));
+        message.To.Add(MailboxAddress.Parse(to));
         message.Subject = subject;
-        message.Body = new TextPart("plain") { Text = body };
+        message.Body = body;
 
         using var client = new SmtpClient();
-
-        var host = _configuration["Smtp:Host"];
-        if (!int.TryParse(_configuration["Smtp:Port"], out int port)) { port = 1025; }
-        if (!bool.TryParse(_configuration["Smtp:SSL"], out bool ssl)) { ssl = false; }
         
-        await client.ConnectAsync(host, port, ssl, cancellationToken).ConfigureAwait(false);
+        await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, _smtpSettings.UseSsl, cancellationToken).ConfigureAwait(false);
 
-        var username = _configuration["Smtp:Username"];
-        var password = _configuration["Smtp:Password"];
-        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+        if (!string.IsNullOrWhiteSpace(_smtpSettings.Username))
         {
-            await client.AuthenticateAsync(username, password, cancellationToken).ConfigureAwait(false);
+            await client.AuthenticateAsync(_smtpSettings.Username, _smtpSettings.Password, cancellationToken).ConfigureAwait(false);
         }
 
         await client.SendAsync(message, cancellationToken).ConfigureAwait(false);

@@ -1,11 +1,11 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
 using MeetingSystem.Context;
-using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
 using MeetingSystem.Model;
 using Microsoft.AspNetCore.Identity;
@@ -13,8 +13,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
-using Minio;
-using Minio.DataModel.Args;
 
 namespace MeetingSystem.Business;
 
@@ -57,31 +55,29 @@ public class AuthService : IAuthService
     private readonly IConfiguration _configuration;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IPasswordHasher<User> _passwordHasher;
-    private readonly IMinioClient _minioClient;
     private readonly IBackgroundJobClient _backgroundJobClient;
     private readonly IEmailService _emailService;
+    private readonly IProfilePictureService _profilePictureService;
     private readonly ILogger<AuthService> _logger;
-    private readonly string _bucketName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AuthService"/> class.
     /// </summary>
     public AuthService(IUnitOfWork unitOfWork,
         IPasswordHasher<User> passwordHasher,
-        IMinioClient minioClient,
         IBackgroundJobClient backgroundJobClient,
         IEmailService emailService,
+        IProfilePictureService profilePictureService,
         IConfiguration configuration,
         ILogger<AuthService> logger)
     {
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
-        _minioClient = minioClient;
         _backgroundJobClient = backgroundJobClient;
         _emailService = emailService;
+        _profilePictureService = profilePictureService;
         _configuration = configuration;
         _logger = logger;
-        _bucketName = _configuration["Minio:BucketName"]!;
     }
 
     /// <inheritdoc />
@@ -108,30 +104,23 @@ public class AuthService : IAuthService
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
 
+            _unitOfWork.Users.Add(user);
+            // Save the user first to ensure the user record exists before we try to attach a file to it.
+            await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
+
+            // Delegate profile picture handling to the dedicated service.
             if (dto.ProfilePicture != null)
             {
-                var objectKey = $"{user.Id}-{Guid.NewGuid()}-{dto.ProfilePicture.FileName}";
-
-                var bucketExistsArgs = new BucketExistsArgs().WithBucket(_bucketName);
-                if (!await _minioClient.BucketExistsAsync(bucketExistsArgs, cancellationToken).ConfigureAwait(false))
+                try
                 {
-                    var makeBucketArgs = new MakeBucketArgs().WithBucket(_bucketName);
-                    await _minioClient.MakeBucketAsync(makeBucketArgs, cancellationToken).ConfigureAwait(false);
+                    await _profilePictureService.SetAsync(user.Id, dto.ProfilePicture, cancellationToken).ConfigureAwait(false);
                 }
-
-                var putObjectArgs = new PutObjectArgs()
-                    .WithBucket(_bucketName)
-                    .WithObject(objectKey)
-                    .WithStreamData(dto.ProfilePicture.OpenReadStream())
-                    .WithObjectSize(dto.ProfilePicture.Length)
-                    .WithContentType(dto.ProfilePicture.ContentType);
-
-                await _minioClient.PutObjectAsync(putObjectArgs, cancellationToken).ConfigureAwait(false);
-                user.ProfilePictureUrl = objectKey;
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to upload profile picture for new user {UserId}", user.Id);
+                    // Currently, this is not fatal error. We'll let the registration succeed without a picture.
+                }
             }
-
-            _unitOfWork.Users.Add(user);
-            await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
             var userRole = await _unitOfWork.Roles.Find(r => r.Name == "User").FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             if (userRole == null)
@@ -179,6 +168,12 @@ public class AuthService : IAuthService
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Generates a signed JWT for the specified user, including their assigned roles as claims.
+    /// </summary>
+    /// <param name="user">The user for whom to generate the token.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A task that results in a signed JWT string.</returns>
     private async Task<string> GenerateJwtToken(User user, CancellationToken cancellationToken = default)
     {
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));

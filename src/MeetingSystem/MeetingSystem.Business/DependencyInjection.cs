@@ -1,3 +1,4 @@
+using MeetingSystem.Business.Jobs;
 using MeetingSystem.Model;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
@@ -23,7 +24,11 @@ public static class DependencyInjection
         services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IEmailService, EmailService>();
-        services.AddScoped<IFileService, FileService>();
+        services.AddScoped<IGenericFileService, GenericFileService>();
+        services.AddScoped<IProfilePictureService, ProfilePictureService>();
+        services.AddScoped<IMeetingFileService, MeetingFileService>();
+        services.AddScoped<IMeetingJobs, MeetingJobs>();
+        services.AddScoped<IMeetingService, MeetingService>();
 
         return services;
     }

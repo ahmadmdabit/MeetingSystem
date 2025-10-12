@@ -54,7 +54,7 @@ public class User
     /// </summary>
     public DateTime CreatedAt { get; set; }
 
-    // --- Navigation Properties ---
+    // ...... Navigation Properties ......
 
     /// <summary>
     /// The collection of meetings organized by this user.

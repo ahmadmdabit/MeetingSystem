@@ -42,9 +42,12 @@ services:
       - Minio__Endpoint=${DK_MINIO_ENDPOINT}
       - Minio__AccessKey=${DK_MINIO_ROOT_USER}
       - Minio__SecretKey=${DK_MINIO_ROOT_PASSWORD}
-      - Minio__BucketName=${DK_MINIO_BUCKET_NAME}
       - Minio__PublicEndpoint=${DK_MINIO_PUBLIC_ENDPOINT} # Public endpoint for generating URLs
       - Minio__SSL=${DK_MINIO_SSL}
+      - Minio__MaxFileSize=${DK_MINIO_MAX_FILESIZE}
+      - Minio__CompressionFileSizeLimit=${DK_MINIO_COMPRESSION_FILESIZE_LIMIT}
+      - Minio__Buckets__Profile=${DK_MINIO_BUCKETS_PROFILE}
+      - Minio__Buckets__Meeting=${DK_MINIO_BUCKETS_MEETING}
       - Smtp__Host=${DK_SMTP_HOST}
       - Smtp__Port=${DK_SMTP_PORT}
       - Smtp__Username=${DK_SMTP_USERNAME}

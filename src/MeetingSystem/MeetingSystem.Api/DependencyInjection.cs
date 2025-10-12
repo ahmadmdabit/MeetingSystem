@@ -7,7 +7,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 
 using Hangfire;
-
+using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -27,6 +27,27 @@ namespace MeetingSystem.Api;
 /// </summary>
 public static class DependencyInjection
 {
+    /// <summary>
+    /// Registers and configures strongly-typed settings classes using the Options Pattern.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to add the services to.</param>
+    /// <param name="configuration">The application's configuration root.</param>
+    /// <returns>The same <see cref="IServiceCollection"/> so that multiple calls can be chained.</returns>
+    public static IServiceCollection AddConfigurationServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddOptions<SmtpSettings>()
+            .BindConfiguration(SmtpSettings.SectionName)
+            .ValidateDataAnnotations();
+
+        services.AddOptions<MinioSettings>()
+            .BindConfiguration(MinioSettings.SectionName)
+            .ValidateDataAnnotations();
+
+        return services;
+    }
+
     /// <summary>
     /// Registers Hangfire services for background job processing.
     /// </summary>

@@ -58,7 +58,7 @@ public class MeetingFile
     /// </summary>
     public DateTime UploadedAt { get; set; }
 
-    // --- Navigation Properties ---
+    // ...... Navigation Properties ......
 
     /// <summary>
     /// The meeting this file is associated with.

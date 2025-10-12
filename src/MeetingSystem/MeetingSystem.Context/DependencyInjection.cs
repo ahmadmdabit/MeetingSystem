@@ -1,4 +1,5 @@
 using MeetingSystem.Model;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,6 +25,8 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        services.AddDataProtection().PersistKeysToDbContext<MeetingSystemDbContext>();
         
         services.AddDbContext<MeetingSystemDbContext>(options => 
             options.UseSqlServer(connectionString));
