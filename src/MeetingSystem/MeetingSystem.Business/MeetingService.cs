@@ -288,7 +288,7 @@ public class MeetingService : IMeetingService
         // Save the changes.
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
-        return (await GetMeetingByIdAsync(meetingId, userId, cancellationToken).ConfigureAwait(false), string.Empty);
+        return (await GetMeetingByIdAsync(meetingId, userId, cancellationToken).ConfigureAwait(false), null);
     }
 
     /// <inheritdoc />

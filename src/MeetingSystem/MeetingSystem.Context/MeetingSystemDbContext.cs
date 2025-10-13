@@ -10,21 +10,24 @@ namespace MeetingSystem.Context;
 /// </summary>
 public class MeetingSystemDbContext : DbContext, IDataProtectionKeyContext
 {
+    // Parameterless constructor maybe needed by mocking frameworks,
+    // though the DbContextOptions constructor is usually sufficient.
+    public MeetingSystemDbContext() { }
     public MeetingSystemDbContext(DbContextOptions<MeetingSystemDbContext> options) : base(options) { }
-    
+
     /// <summary>
     /// Represents the collection of keys used by the ASP.NET Core Data Protection system.
     /// </summary>
-    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
+    public virtual DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
-    public DbSet<User> Users { get; set; }
-    public DbSet<Role> Roles { get; set; }
-    public DbSet<UserRole> UserRoles { get; set; }
-    public DbSet<Meeting> Meetings { get; set; }
-    public DbSet<MeetingFile> MeetingFiles { get; set; }
-    public DbSet<MeetingParticipant> MeetingParticipants { get; set; }
-    public DbSet<MeetingsLog> MeetingsLog { get; set; }
-    public DbSet<RevokedToken> RevokedTokens { get; set; }
+    public virtual DbSet<User> Users { get; set; }
+    public virtual DbSet<Role> Roles { get; set; }
+    public virtual DbSet<UserRole> UserRoles { get; set; }
+    public virtual DbSet<Meeting> Meetings { get; set; }
+    public virtual DbSet<MeetingFile> MeetingFiles { get; set; }
+    public virtual DbSet<MeetingParticipant> MeetingParticipants { get; set; }
+    public virtual DbSet<MeetingsLog> MeetingsLog { get; set; }
+    public virtual DbSet<RevokedToken> RevokedTokens { get; set; }
 
     /// <summary>
     /// Configures the schema and relationships for the database model using the Fluent API.
