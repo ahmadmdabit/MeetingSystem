@@ -72,6 +72,8 @@
         "test": {
           "builder": "@angular/build:karma",
           "options": {
+            "watch": false,
+            "codeCoverage": true,
             "tsConfig": "tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "assets": [
