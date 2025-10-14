@@ -222,4 +222,28 @@ public class MeetingCleanupServiceTests
         _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once); // It was attempted
         _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once); // But then rolled back
     }
+
+    [Test]
+    public async Task CleanUpAsync_WhenCommitFails_ThrowsAndRollsBack()
+    {
+        // Arrange
+        var meetingId = Guid.NewGuid();
+        var meetingsToClean = new List<Meeting>
+        {
+            new Meeting { Id = meetingId, OrganizerId = Guid.NewGuid(), Name = "Meeting with commit failure", Description = "Desc", IsCanceled = true, CanceledAt = DateTime.UtcNow.AddDays(-40) }
+        };
+        var mockDbSet = meetingsToClean.BuildMockDbSet();
+        _unitOfWorkMock.Setup(u => u.Meetings.Find(It.IsAny<Expression<Func<Meeting, bool>>>())).Returns(mockDbSet.Object);
+        _unitOfWorkMock.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new Exception("Simulated commit failure"));
+
+        // Act
+        Func<Task> act = () => _cleanupService.CleanUpAsync(true, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated commit failure");
+        _unitOfWorkMock.Verify(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.Meetings.RemoveRange(It.IsAny<IEnumerable<Meeting>>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+        _unitOfWorkMock.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

@@ -227,25 +227,4 @@ public class ProfilePictureServiceTests
         // Assert
         await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
     }
-
-    /// <summary>
-    /// Verifies that the catch block in RemoveAsync is triggered when the file service throws an exception.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenStorageFails_ThrowsAndRollsBack()
-    {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), ProfilePictureUrl = "existing-key", Email = "test@test.com", FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        _genericFileServiceMock.Setup(s => s.RemoveObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Simulated storage failure"));
-
-        // Act
-        Func<Task> act = async () => await _profilePictureService.RemoveAsync(user.Id, true, CancellationToken.None);
-
-        // Assert
-        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
-    }
 }

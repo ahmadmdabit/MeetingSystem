@@ -491,6 +491,33 @@ public class MeetingServiceTests
         (await _dbContext.Meetings.CountAsync()).Should().Be(0);
     }
 
+    [Test]
+    public async Task UpdateMeetingAsync_WhenCommitFails_Throws()
+    {
+        // Arrange
+        var organizer = await CreateUserAsync("org@test.com");
+        var meeting = await CreateMeetingAsync(organizer.Id);
+        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+
+        meeting.Name = dto.Name;
+        meeting.Description = dto.Description;
+        meeting.StartAt = dto.StartAt;
+        meeting.EndAt = dto.EndAt;
+
+        var mockUnitOfWork = new Mock<IUnitOfWork>();
+        mockUnitOfWork.Setup(u => u.Meetings).Returns(_unitOfWork.Meetings);
+        mockUnitOfWork.Setup(u => u.CompleteAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new Exception("Simulated commit failure"));
+        
+        var meetingService = new MeetingService(mockUnitOfWork.Object, _backgroundJobClientMock.Object, _loggerMock.Object);
+
+        // Act
+        Func<Task> act = () => meetingService.UpdateMeetingAsync(meeting.Id, dto, organizer.Id, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated commit failure");
+    }
+
     /// <summary>
     /// Verifies that CancelMeetingAsync returns a failure when the target meeting does not exist.
     /// </summary>

@@ -38,6 +38,25 @@ public interface IMeetingFileService
     /// On failure, returns false status and a descriptive error message.
     /// </returns>
     Task<(bool Status, string? ErrorMessage)> RemoveAsync(Guid meetingId, Guid fileId, Guid userId, bool commit = true, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a list of all files associated with a specific meeting.
+    /// </summary>
+    /// <param name="meetingId">The ID of the meeting.</param>
+    /// <param name="userId">The ID of the user requesting the files (must be a participant).</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple containing a list of file DTOs on success, or an error message on failure.</returns>
+    Task<(List<FileDto>? Files, string? ErrorMessage)> GetMeetingFilesAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates a secure, short-lived download URL for a specific meeting file.
+    /// </summary>
+    /// <param name="meetingId">The ID of the meeting.</param>
+    /// <param name="fileId">The ID of the file.</param>
+    /// <param name="userId">The ID of the user requesting the URL (must be a participant).</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple containing the presigned URL on success, or an error message on failure.</returns>
+    Task<(string? Url, string? ErrorMessage)> GetFileDownloadUrlAsync(Guid meetingId, Guid fileId, Guid userId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -192,5 +211,58 @@ public class MeetingFileService : IMeetingFileService
             }
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<(List<FileDto>? Files, string? ErrorMessage)> GetMeetingFilesAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        var isParticipant = await _unitOfWork.MeetingParticipants
+            .Find(p => p.MeetingId == meetingId && p.UserId == userId)
+            .AnyAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!isParticipant)
+        {
+            _logger.LogWarning("Get files failed: User {UserId} is not a participant of meeting {MeetingId}.", userId, meetingId);
+            return (null, "User is not a participant of this meeting.");
+        }
+
+        var files = await _unitOfWork.MeetingFiles
+            .Find(f => f.MeetingId == meetingId)
+            .Select(f => new FileDto(f.Id, f.FileName, f.ContentType, f.SizeBytes))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return (files, null);
+    }
+
+    /// <inheritdoc />
+    public async Task<(string? Url, string? ErrorMessage)> GetFileDownloadUrlAsync(Guid meetingId, Guid fileId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        var isParticipant = await _unitOfWork.MeetingParticipants
+            .Find(p => p.MeetingId == meetingId && p.UserId == userId)
+            .AnyAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!isParticipant)
+        {
+            _logger.LogWarning("Get download URL failed: User {UserId} is not a participant of meeting {MeetingId}.", userId, meetingId);
+            return (null, "User is not a participant of this meeting.");
+        }
+
+        var file = await _unitOfWork.MeetingFiles
+            .Find(f => f.Id == fileId && f.MeetingId == meetingId)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (file == null)
+        {
+            _logger.LogWarning("Get download URL failed: File {FileId} not found in meeting {MeetingId}.", fileId, meetingId);
+            return (null, "File not found.");
+        }
+
+        var url = await _genericFileService.GetPresignedUrlAsync(_bucketName, file.MinioObjectKey, cancellationToken).ConfigureAwait(false);
+        return (url, null);
     }
 }

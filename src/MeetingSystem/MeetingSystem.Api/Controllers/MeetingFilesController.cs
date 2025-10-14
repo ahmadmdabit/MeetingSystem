@@ -59,6 +59,53 @@ public class MeetingFilesController : ControllerBase
     }
 
     /// <summary>
+    /// Gets a list of all files for a specific meeting.
+    /// </summary>
+    /// <param name="meetingId">The ID of the meeting.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A list of file metadata objects.</returns>
+    [HttpGet]
+    [ProducesResponseType(typeof(List<FileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetFiles(Guid meetingId, CancellationToken cancellationToken)
+    {
+        var (files, errorMessage) = await _meetingFileService.GetMeetingFilesAsync(meetingId, GetUserId(), cancellationToken);
+        if (errorMessage != null)
+        {
+            return Forbid(errorMessage);
+        }
+        return Ok(files);
+    }
+
+    /// <summary>
+    /// Gets a secure, short-lived download URL for a specific file.
+    /// </summary>
+    /// <param name="meetingId">The ID of the meeting.</param>
+    /// <param name="fileId">The ID of the file to download.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A pre-signed URL for the file.</returns>
+    [HttpGet("{fileId:guid}/download-url")]
+    [ProducesResponseType(typeof(PresignedUrlDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDownloadUrl(Guid meetingId, Guid fileId, CancellationToken cancellationToken)
+    {
+        var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meetingId, fileId, GetUserId(), cancellationToken);
+
+        if (url == null)
+        {
+            // Distinguish between authorization and not found errors
+            if (errorMessage != null && errorMessage.Contains("participant"))
+            {
+                return Forbid(errorMessage);
+            }
+            return NotFound(errorMessage);
+        }
+
+        return Ok(new PresignedUrlDto(url));
+    }
+
+    /// <summary>
     /// Removes a specific file from a meeting.
     /// </summary>
     /// <remarks>

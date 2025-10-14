@@ -1,289 +1,315 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-
 using FluentAssertions;
-
-using MeetingSystem.Business;
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-
 using Moq;
-
 using NUnit.Framework;
 
-namespace MeetingSystem.Business.Tests;
-
-[TestFixture]
-public class MeetingFileServiceTests 
+namespace MeetingSystem.Business.Tests
 {
-    private IUnitOfWork _unitOfWork;
-    private MeetingSystemDbContext _dbContext;
-    private Mock<IGenericFileService> _genericFileServiceMock;
-    private Mock<IOptions<MinioSettings>> _minioSettingsMock;
-    private MeetingFileService _meetingFileService;
-
-    [SetUp]
-    public async Task SetUp()
+    [TestFixture]
+    public class MeetingFileServiceTests
     {
-        var options = new DbContextOptionsBuilder<MeetingSystemDbContext>()
-            .UseSqlServer(GlobalSetup.ConnectionString)
-            .Options;
-        _dbContext = new MeetingSystemDbContext(options);
-        await _dbContext.Database.EnsureDeletedAsync();
-        await _dbContext.Database.MigrateAsync();
-        _unitOfWork = new UnitOfWork(_dbContext, Mock.Of<ILogger<UnitOfWork>>());
+        private IUnitOfWork _unitOfWork;
+        private MeetingSystemDbContext _dbContext;
+        private Mock<IGenericFileService> _genericFileServiceMock;
+        private Mock<IOptions<MinioSettings>> _minioSettingsMock;
+        private MeetingFileService _meetingFileService;
 
-        _genericFileServiceMock = new Mock<IGenericFileService>();
-        _minioSettingsMock = new Mock<IOptions<MinioSettings>>();
-        _minioSettingsMock.Setup(s => s.Value).Returns(new MinioSettings { PublicEndpoint = "http://localhost:9000", Buckets = new Buckets { Profile = "profile-pics", Meeting = "meeting-files" } });
+        [SetUp]
+        public async Task SetUp()
+        {
+            var options = new DbContextOptionsBuilder<MeetingSystemDbContext>()
+                .UseSqlServer(GlobalSetup.ConnectionString)
+                .Options;
+            _dbContext = new MeetingSystemDbContext(options);
+            await _dbContext.Database.EnsureDeletedAsync();
+            await _dbContext.Database.MigrateAsync();
+            _unitOfWork = new UnitOfWork(_dbContext, Mock.Of<ILogger<UnitOfWork>>());
 
-        _meetingFileService = new MeetingFileService(_unitOfWork, _genericFileServiceMock.Object, _minioSettingsMock.Object, new Mock<ILogger<MeetingFileService>>().Object);
-    }
+            _genericFileServiceMock = new Mock<IGenericFileService>();
+            _minioSettingsMock = new Mock<IOptions<MinioSettings>>();
+            _minioSettingsMock.Setup(s => s.Value).Returns(new MinioSettings { PublicEndpoint = "http://localhost:9000", Buckets = new Buckets { Profile = "profile-pics", Meeting = "meeting-files" } });
 
-    [TearDown]
-    public async Task TearDown()
-    {
-        await _unitOfWork.DisposeAsync();
-        await _dbContext.DisposeAsync();
-    }
+            _meetingFileService = new MeetingFileService(_unitOfWork, _genericFileServiceMock.Object, _minioSettingsMock.Object, new Mock<ILogger<MeetingFileService>>().Object);
+        }
 
-    /// <summary>
-    /// Verifies that UploadAsync fails if the uploader is not a participant of the meeting.
-    /// </summary>
-    [Test]
-    public async Task UploadAsync_WhenUserIsNotParticipant_ReturnsError()
-    {
-        // Arrange
-        // Create a valid user first, then use their ID as the OrganizerId.
-        var organizer = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var nonParticipant = new User { Id = Guid.NewGuid(), Email = "nonp@test.com", FirstName = "Non", LastName = "Participant", Phone = "456", PasswordHash = "hash" };
-        _dbContext.Users.AddRange(organizer, nonParticipant);
+        [TearDown]
+        public async Task TearDown()
+        {
+            await _unitOfWork.DisposeAsync();
+            await _dbContext.DisposeAsync();
+        }
 
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizer.Id };
-        _dbContext.Meetings.Add(meeting);
+        [Test]
+        public async Task UploadAsync_WhenUserIsNotParticipant_ReturnsError()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var nonParticipant = await CreateUserAsync("nonp@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var files = new FormFileCollection();
+            var (resultFiles, errorMessage) = await _meetingFileService.UploadAsync(meeting.Id, files, nonParticipant.Id, true, CancellationToken.None);
+            resultFiles.Should().BeNull();
+            errorMessage.Should().Be("User is not a participant of this meeting.");
+        }
 
-        await _dbContext.SaveChangesAsync();
-        var files = new FormFileCollection();
+        [Test]
+        public async Task UploadAsync_WhenMeetingNotFound_ReturnsError()
+        {
+            var nonExistentMeetingId = Guid.NewGuid();
+            var user = await CreateUserAsync("test@user.com");
+            var files = new FormFileCollection();
+            var (resultFiles, errorMessage) = await _meetingFileService.UploadAsync(nonExistentMeetingId, files, user.Id, true, CancellationToken.None);
+            resultFiles.Should().BeNull();
+            errorMessage.Should().Be("Meeting not found.");
+        }
 
-        // Act
-        var (resultFiles, errorMessage) = await _meetingFileService.UploadAsync(meeting.Id, files, nonParticipant.Id, true, CancellationToken.None);
+        [Test]
+        public async Task RemoveAsync_WhenUserIsNotAuthorized_ReturnsError()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var uploader = await CreateUserAsync("uploader@test.com");
+            var unauthorizedUser = await CreateUserAsync("other@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, unauthorizedUser.Id, true, CancellationToken.None);
+            success.Should().BeFalse();
+            errorMessage.Should().Be("User is not authorized to delete this file.");
+        }
 
-        // Assert
-        resultFiles.Should().BeNull();
-        errorMessage.Should().Be("User is not a participant of this meeting.");
-    }
+        [Test]
+        public async Task RemoveAsync_WhenUserIsUploader_Succeeds()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var uploader = await CreateUserAsync("uploader@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, uploader.Id, true, CancellationToken.None);
+            success.Should().BeTrue();
+            errorMessage.Should().BeNull();
+            _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("meeting-files", file.MinioObjectKey, It.IsAny<CancellationToken>()), Times.Once);
+        }
 
-    /// <summary>
-    /// Verifies that RemoveAsync fails if the user is neither the organizer nor the uploader.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenUserIsNotAuthorized_ReturnsError()
-    {
-        // Arrange
-        // Create all users and link them correctly to the meeting and file.
-        var organizer = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var uploader = new User { Id = Guid.NewGuid(), Email = "uploader@test.com", FirstName = "Uploader", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var unauthorizedUser = new User { Id = Guid.NewGuid(), Email = "other@test.com", FirstName = "Other", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        _dbContext.Users.AddRange(organizer, uploader, unauthorizedUser);
+        [Test]
+        public async Task UploadAsync_WhenUserIsParticipant_UploadsFilesAndSavesToDb()
+        {
+            var user = await CreateUserAsync("participant@test.com");
+            var meeting = await CreateMeetingAsync(user.Id);
+            var participant = new MeetingParticipant { MeetingId = meeting.Id, UserId = user.Id };
+            _dbContext.MeetingParticipants.Add(participant);
+            await _dbContext.SaveChangesAsync();
+            var file1Mock = new Mock<IFormFile>();
+            file1Mock.Setup(f => f.FileName).Returns("file1.txt");
+            file1Mock.Setup(f => f.ContentType).Returns("text/plain");
+            var files = new FormFileCollection { file1Mock.Object };
+            var (resultFiles, errorMessage) = await _meetingFileService.UploadAsync(meeting.Id, files, user.Id, true, CancellationToken.None);
+            errorMessage.Should().BeNull();
+            resultFiles.Should().NotBeNull();
+            resultFiles.Should().HaveCount(1);
+            _genericFileServiceMock.Verify(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), true, It.IsAny<CancellationToken>()), Times.Once);
+            (await _dbContext.MeetingFiles.CountAsync(f => f.MeetingId == meeting.Id)).Should().Be(1);
+        }
 
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizer.Id };
-        _dbContext.Meetings.Add(meeting);
+        [Test]
+        public async Task RemoveAsync_WhenFileIsNotFound_ReturnsNotFoundEror()
+        {
+            var user = await CreateUserAsync("org@test.com");
+            var meeting = await CreateMeetingAsync(user.Id);
+            var nonExistentFileId = Guid.NewGuid();
+            var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, nonExistentFileId, user.Id, true, CancellationToken.None);
+            success.Should().BeFalse();
+            errorMessage.Should().Be("File not found.");
+        }
 
-        var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
-        _dbContext.MeetingFiles.Add(file);
+        [Test]
+        public async Task RemoveAsync_WhenUserIsOrganizer_Succeeds()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var uploader = await CreateUserAsync("uploader@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, organizer.Id, true, CancellationToken.None);
+            success.Should().BeTrue();
+            errorMessage.Should().BeNull();
+            _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("meeting-files", file.MinioObjectKey, It.IsAny<CancellationToken>()), Times.Once);
+        }
 
-        await _dbContext.SaveChangesAsync();
+        [Test]
+        public async Task UploadAsync_WhenStorageFails_ThrowsAndRollsBack()
+        {
+            var user = await CreateUserAsync("participant@test.com");
+            var meeting = await CreateMeetingAsync(user.Id);
+            var participant = new MeetingParticipant { MeetingId = meeting.Id, UserId = user.Id };
+            _dbContext.MeetingParticipants.Add(participant);
+            await _dbContext.SaveChangesAsync();
+            var fileMock = new Mock<IFormFile>();
+            fileMock.Setup(f => f.FileName).Returns("file1.txt");
+            var files = new FormFileCollection { fileMock.Object };
+            _genericFileServiceMock.Setup(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), true, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new Exception("Simulated storage failure"));
+            Func<Task> act = async () => await _meetingFileService.UploadAsync(meeting.Id, files, user.Id, true, CancellationToken.None);
+            await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
+            (await _dbContext.MeetingFiles.CountAsync()).Should().Be(0);
+        }
 
-        // Act
-        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, unauthorizedUser.Id, true, CancellationToken.None);
+        [Test]
+        public async Task UploadAsync_WhenCommitFails_ThrowsAndRollsBack()
+        {
+            var user = await CreateUserAsync("participant@test.com");
+            var meeting = await CreateMeetingAsync(user.Id);
+            var participant = new MeetingParticipant { MeetingId = meeting.Id, UserId = user.Id };
+            _dbContext.MeetingParticipants.Add(participant);
+            await _dbContext.SaveChangesAsync();
 
-        // Assert
-        success.Should().BeFalse();
-        errorMessage.Should().Be("User is not authorized to delete this file.");
-    }
+            var file1Mock = new Mock<IFormFile>();
+            file1Mock.Setup(f => f.FileName).Returns("file1.txt");
+            file1Mock.Setup(f => f.ContentType).Returns("text/plain");
+            var files = new FormFileCollection { file1Mock.Object };
 
-    /// <summary>
-    /// Verifies that RemoveAsync succeeds if the user is the original uploader but not the organizer.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenUserIsUploader_Succeeds()
-    {
-        // Arrange
-        // Create all users and link them correctly.
-        var organizer = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var uploader = new User { Id = Guid.NewGuid(), Email = "uploader@test.com", FirstName = "Uploader", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        _dbContext.Users.AddRange(organizer, uploader);
+            var mockUnitOfWork = new Mock<IUnitOfWork>();
+            mockUnitOfWork.Setup(u => u.Meetings).Returns(_unitOfWork.Meetings);
+            mockUnitOfWork.Setup(u => u.MeetingParticipants).Returns(_unitOfWork.MeetingParticipants);
+            mockUnitOfWork.Setup(u => u.MeetingFiles).Returns(_unitOfWork.MeetingFiles);
+            mockUnitOfWork.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new Exception("Simulated commit failure"));
 
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizer.Id };
-        _dbContext.Meetings.Add(meeting);
+            var meetingFileService = new MeetingFileService(
+                mockUnitOfWork.Object,
+                _genericFileServiceMock.Object,
+                _minioSettingsMock.Object,
+                new Mock<ILogger<MeetingFileService>>().Object);
 
-        var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
-        _dbContext.MeetingFiles.Add(file);
+            Func<Task> act = () => meetingFileService.UploadAsync(meeting.Id, files, user.Id, true, CancellationToken.None);
+            await act.Should().ThrowAsync<Exception>().WithMessage("Simulated commit failure");
+        }
 
-        await _dbContext.SaveChangesAsync();
+        [Test]
+        public async Task RemoveAsync_WhenStorageFails_ThrowsAndRollsBack()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = organizer.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            _genericFileServiceMock.Setup(s => s.RemoveObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new Exception("Simulated storage failure"));
+            Func<Task> act = async () => await _meetingFileService.RemoveAsync(meeting.Id, file.Id, organizer.Id, true, CancellationToken.None);
+            await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
+            _dbContext.Entry(file).State.Should().NotBe(EntityState.Detached);
+        }
 
-        // Act
-        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, uploader.Id, true, CancellationToken.None);
+        #region GetMeetingFilesAsync Tests
 
-        // Assert
-        success.Should().BeTrue();
-        errorMessage.Should().BeNull();
-        _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("meeting-files", file.MinioObjectKey, It.IsAny<CancellationToken>()), Times.Once);
-    }
+        [Test]
+        public async Task GetMeetingFilesAsync_WhenUserIsNotParticipant_ReturnsError()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var nonParticipant = await CreateUserAsync("non-participant@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var (files, errorMessage) = await _meetingFileService.GetMeetingFilesAsync(meeting.Id, nonParticipant.Id);
+            files.Should().BeNull();
+            errorMessage.Should().Be("User is not a participant of this meeting.");
+        }
 
-    /// <summary>
-    /// Verifies the successful upload of multiple files by an authorized participant.
-    /// </summary>
-    [Test]
-    public async Task UploadAsync_WhenUserIsParticipant_UploadsFilesAndSavesToDb()
-    {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), Email = "participant@test.com", FirstName = "Part", LastName = "icipant", Phone = "123", PasswordHash = "hash" };
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = user.Id };
-        var participant = new MeetingParticipant { MeetingId = meeting.Id, UserId = user.Id };
-        _dbContext.Users.Add(user);
-        _dbContext.Meetings.Add(meeting);
-        _dbContext.MeetingParticipants.Add(participant);
-        await _dbContext.SaveChangesAsync();
+        [Test]
+        public async Task GetMeetingFilesAsync_WhenUserIsParticipant_ReturnsFiles()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            _dbContext.MeetingParticipants.Add(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id });
+            _dbContext.MeetingFiles.Add(new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, FileName = "test.txt", UploadedByUserId = organizer.Id, ContentType = "text/plain", MinioObjectKey = "key" });
+            await _dbContext.SaveChangesAsync();
+            var (files, errorMessage) = await _meetingFileService.GetMeetingFilesAsync(meeting.Id, organizer.Id);
+            errorMessage.Should().BeNull();
+            files.Should().NotBeNull();
+            files.Should().HaveCount(1);
+            files!.First().FileName.Should().Be("test.txt");
+        }
 
-        // Create realistic mock files with all required properties.
-        var file1Mock = new Mock<IFormFile>();
-        file1Mock.Setup(f => f.FileName).Returns("file1.txt");
-        file1Mock.Setup(f => f.ContentType).Returns("text/plain");
-        file1Mock.Setup(f => f.Length).Returns(1024);
-        file1Mock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream());
+        #endregion
 
-        var file2Mock = new Mock<IFormFile>();
-        file2Mock.Setup(f => f.FileName).Returns("file2.log");
-        file2Mock.Setup(f => f.ContentType).Returns("text/plain");
-        file2Mock.Setup(f => f.Length).Returns(2048);
-        file2Mock.Setup(f => f.OpenReadStream()).Returns(new MemoryStream());
+        #region GetFileDownloadUrlAsync Tests
 
-        var files = new FormFileCollection { file1Mock.Object, file2Mock.Object };
+        [Test]
+        public async Task GetFileDownloadUrlAsync_WhenUserIsNotParticipant_ReturnsError()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var nonParticipant = await CreateUserAsync("non-participant@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, FileName = "test.txt", UploadedByUserId = organizer.Id, ContentType = "text/plain", MinioObjectKey = "key" };
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meeting.Id, file.Id, nonParticipant.Id);
+            url.Should().BeNull();
+            errorMessage.Should().Be("User is not a participant of this meeting.");
+        }
 
-        // Act
-        var (resultFiles, errorMessage) = await _meetingFileService.UploadAsync(meeting.Id, files, user.Id, true, CancellationToken.None);
+        [Test]
+        public async Task GetFileDownloadUrlAsync_WhenFileNotFound_ReturnsError()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            _dbContext.MeetingParticipants.Add(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id });
+            await _dbContext.SaveChangesAsync();
+            var nonExistentFileId = Guid.NewGuid();
+            var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meeting.Id, nonExistentFileId, organizer.Id);
+            url.Should().BeNull();
+            errorMessage.Should().Be("File not found.");
+        }
 
-        // Assert
-        errorMessage.Should().BeNull();
-        resultFiles.Should().NotBeNull();
-        resultFiles.Should().HaveCount(2);
+        [Test]
+        public async Task GetFileDownloadUrlAsync_WhenSuccessful_ReturnsUrl()
+        {
+            var organizer = await CreateUserAsync("org@test.com");
+            var meeting = await CreateMeetingAsync(organizer.Id);
+            var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, FileName = "test.txt", UploadedByUserId = organizer.Id, ContentType = "text/plain", MinioObjectKey = "the-object-key" };
+            _dbContext.MeetingParticipants.Add(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id });
+            _dbContext.MeetingFiles.Add(file);
+            await _dbContext.SaveChangesAsync();
+            _genericFileServiceMock.Setup(s => s.GetPresignedUrlAsync("meeting-files", "the-object-key", It.IsAny<CancellationToken>()))
+                .ReturnsAsync("http://presigned-url.com/the-object-key");
+            var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meeting.Id, file.Id, organizer.Id);
+            errorMessage.Should().BeNull();
+            url.Should().Be("http://presigned-url.com/the-object-key");
+        }
 
-        _genericFileServiceMock.Verify(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), true, It.IsAny<CancellationToken>()), Times.Exactly(2));
+        #endregion
 
-        (await _dbContext.MeetingFiles.CountAsync(f => f.MeetingId == meeting.Id)).Should().Be(2);
-    }
+        #region Helper Methods
 
-    /// <summary>
-    /// Verifies that RemoveAsync returns a "File not found" error if the file ID is invalid.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenFileIsNotFound_ReturnsNotFoundEror()
-    {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = user.Id };
-        _dbContext.Users.Add(user);
-        _dbContext.Meetings.Add(meeting);
-        await _dbContext.SaveChangesAsync();
-        var nonExistentFileId = Guid.NewGuid();
+        private async Task<User> CreateUserAsync(string email)
+        {
+            var user = new User { Id = Guid.NewGuid(), Email = email, FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync();
+            return user;
+        }
 
-        // Act
-        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, nonExistentFileId, user.Id, true, CancellationToken.None);
+        private async Task<Meeting> CreateMeetingAsync(Guid organizerId)
+        {
+            var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizerId };
+            _dbContext.Meetings.Add(meeting);
+            await _dbContext.SaveChangesAsync();
+            return meeting;
+        }
 
-        // Assert
-        success.Should().BeFalse();
-        errorMessage.Should().Be("File not found.");
-    }
-
-    /// <summary>
-    /// Verifies that the meeting organizer can successfully remove a file they did not upload.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenUserIsOrganizer_Succeeds()
-    {
-        // Arrange
-        var organizer = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var uploader = new User { Id = Guid.NewGuid(), Email = "uploader@test.com", FirstName = "Uploader", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizer.Id };
-        var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = uploader.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
-        _dbContext.Users.AddRange(organizer, uploader);
-        _dbContext.Meetings.Add(meeting);
-        _dbContext.MeetingFiles.Add(file);
-        await _dbContext.SaveChangesAsync();
-
-        // Act: The ORGANIZER is deleting the file.
-        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meeting.Id, file.Id, organizer.Id, true, CancellationToken.None);
-
-        // Assert
-        success.Should().BeTrue();
-        errorMessage.Should().BeNull();
-        _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("meeting-files", file.MinioObjectKey, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    /// <summary>
-    /// Verifies that the catch block in UploadAsync is triggered when the file service throws an exception.
-    /// </summary>
-    [Test]
-    public async Task UploadAsync_WhenStorageFails_ThrowsAndRollsBack()
-    {
-        // Arrange
-        var user = new User { Id = Guid.NewGuid(), Email = "participant@test.com", FirstName = "Part", LastName = "icipant", Phone = "123", PasswordHash = "hash" };
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = user.Id };
-        var participant = new MeetingParticipant { MeetingId = meeting.Id, UserId = user.Id };
-        _dbContext.Users.Add(user);
-        _dbContext.Meetings.Add(meeting);
-        _dbContext.MeetingParticipants.Add(participant);
-        await _dbContext.SaveChangesAsync();
-
-        var fileMock = new Mock<IFormFile>();
-        fileMock.Setup(f => f.FileName).Returns("file1.txt");
-        var files = new FormFileCollection { fileMock.Object };
-
-        _genericFileServiceMock.Setup(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), true, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Simulated storage failure"));
-
-        // Act
-        Func<Task> act = async () => await _meetingFileService.UploadAsync(meeting.Id, files, user.Id, true, CancellationToken.None);
-
-        // Assert
-        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
-        (await _dbContext.MeetingFiles.CountAsync()).Should().Be(0); // Verify rollback
-    }
-
-    /// <summary>
-    /// Verifies that the catch block in RemoveAsync is triggered when the file service throws an exception.
-    /// </summary>
-    [Test]
-    public async Task RemoveAsync_WhenStorageFails_ThrowsAndRollsBack()
-    {
-        // Arrange
-        var organizer = new User { Id = Guid.NewGuid(), Email = "org@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
-        var meeting = new Meeting { Id = Guid.NewGuid(), Name = "Test Meeting", Description = "Test Meeting Description", OrganizerId = organizer.Id };
-        var file = new MeetingFile { Id = Guid.NewGuid(), MeetingId = meeting.Id, UploadedByUserId = organizer.Id, FileName = "test.txt", ContentType = "text/plain", MinioObjectKey = "key" };
-        _dbContext.Users.Add(organizer);
-        _dbContext.Meetings.Add(meeting);
-        _dbContext.MeetingFiles.Add(file);
-        await _dbContext.SaveChangesAsync();
-
-        _genericFileServiceMock.Setup(s => s.RemoveObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new Exception("Simulated storage failure"));
-
-        // Act
-        Func<Task> act = async () => await _meetingFileService.RemoveAsync(meeting.Id, file.Id, organizer.Id, true, CancellationToken.None);
-
-        // Assert
-        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
-        // Verify the entity was not removed from the context
-        _dbContext.Entry(file).State.Should().NotBe(EntityState.Detached);
+        #endregion
     }
 }
