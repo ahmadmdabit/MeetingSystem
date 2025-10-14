@@ -21,15 +21,16 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IAdminService, AdminService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IEmailService, EmailService>();
         services.AddScoped<IGenericFileService, GenericFileService>();
-        services.AddScoped<IProfilePictureService, ProfilePictureService>();
+        services.AddScoped<IMeetingCleanupService, MeetingCleanupService>();
         services.AddScoped<IMeetingFileService, MeetingFileService>();
         services.AddScoped<IMeetingJobs, MeetingJobs>();
         services.AddScoped<IMeetingService, MeetingService>();
-        services.AddScoped<IMeetingCleanupService, MeetingCleanupService>();
+        services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+        services.AddScoped<IProfilePictureService, ProfilePictureService>();
 
         return services;
     }

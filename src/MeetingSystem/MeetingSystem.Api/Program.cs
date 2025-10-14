@@ -98,18 +98,18 @@ try
         app.UseSwaggerUI();
     }
 
-    // Secure the Hangfire dashboard, allowing access only to authenticated users with the "Admin" role.
-    app.UseHangfireDashboard("/hangfire", new DashboardOptions
-    {
-        AsyncAuthorization = [new HangfireJwtAuthorizationFilter(hangfireSettings.DashboardAdminRole)]
-    });
-
     app.UseHttpsRedirection();
     app.UseSerilogRequestLogging(); // Log every incoming HTTP request.
     app.UseCors("AllowedApps"); // Apply the configured CORS policy.
 
     app.UseAuthentication(); // 1. Determines who the user is.
     app.UseAuthorization();  // 2. Determines what the user is allowed to do.
+
+    // Secure the Hangfire dashboard, allowing access only to authenticated users with the "Admin" role.
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = [new HangfireJwtAuthorizationFilter(hangfireSettings.DashboardAdminRole)]
+    });
 
     app.MapControllers();
     app.MapHealthChecks("/health", new HealthCheckOptions

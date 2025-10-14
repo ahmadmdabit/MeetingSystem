@@ -57,6 +57,11 @@ public class User
     // ...... Navigation Properties ......
 
     /// <summary>
+    /// The collection of user role assignments for this user.
+    /// </summary>
+    public virtual ICollection<UserRole> UserRoles { get; set; } = [];
+
+    /// <summary>
     /// The collection of meetings organized by this user.
     /// </summary>
     public virtual ICollection<Meeting> OrganizedMeetings { get; set; } = [];

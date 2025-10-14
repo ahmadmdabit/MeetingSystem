@@ -64,7 +64,7 @@ public class MeetingSystemDbContext : DbContext, IDataProtectionKeyContext
 
             // Relationship to User
             entity.HasOne(ur => ur.User)
-                .WithMany() // A User can have many UserRole entries
+                .WithMany(u => u.UserRoles) // A User can have many UserRole entries
                 .HasForeignKey(ur => ur.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
