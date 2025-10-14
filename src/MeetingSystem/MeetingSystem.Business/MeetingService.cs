@@ -10,7 +10,6 @@ namespace MeetingSystem.Business;
 
 /// <summary>
 /// Defines the contract for the service that manages core meeting business logic.
-/// File-related operations are delegated to the IFileService.
 /// </summary>
 public interface IMeetingService
 {
@@ -19,15 +18,17 @@ public interface IMeetingService
     /// </summary>
     /// <param name="dto">The data for the new meeting.</param>
     /// <param name="organizerId">The ID of the user creating the meeting.</param>
+    /// <param name="commit">A flag indicating whether to commit the transaction.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>A DTO representing the newly created meeting.</returns>
-    Task<MeetingDto> CreateMeetingAsync(CreateMeetingDto dto, Guid organizerId, CancellationToken cancellationToken = default);
+    /// <returns>A DTO representing the newly created meeting, or null if the organizer was not found.</returns>
+    Task<MeetingDto?> CreateMeetingAsync(CreateMeetingDto dto, Guid organizerId, bool commit = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the details of a specific meeting, provided the user is a participant.
     /// </summary>
     /// <param name="meetingId">The ID of the meeting to retrieve.</param>
     /// <param name="userId">The ID of the user requesting the details.</param>
+    /// <param name="commit">A flag indicating whether to commit the transaction.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A DTO with the meeting's details, or null if not found or user is not a participant.</returns>
     Task<MeetingDto?> GetMeetingByIdAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default);
@@ -49,7 +50,7 @@ public interface IMeetingService
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>
     /// A tuple containing the updated <see cref="MeetingDto"/> and a null error message on success.
-    /// On failure (e.g., not found or not authorized), returns a null DTO and a descriptive error message.
+    /// On failure, returns a null DTO and a descriptive error message.
     /// </returns>
     Task<(MeetingDto? Meeting, string? ErrorMessage)> UpdateMeetingAsync(Guid meetingId, UpdateMeetingDto dto, Guid userId, CancellationToken cancellationToken = default);
 
@@ -58,9 +59,11 @@ public interface IMeetingService
     /// </summary>
     /// <param name="meetingId">The ID of the meeting to cancel.</param>
     /// <param name="userId">The ID of the user attempting the cancellation.</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>True if the cancellation was successful; otherwise, false.</returns>
-    Task<bool> CancelMeetingAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default);
+    /// <returns>
+    /// A tuple containing the true status and a null error message on success.
+    /// On failure, returns false status and a descriptive error message.
+    /// </returns>
+    Task<(bool Status, string? ErrorMessage)> CancelMeetingAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Adds a participant to a meeting. Only the organizer can perform this action.
@@ -69,8 +72,11 @@ public interface IMeetingService
     /// <param name="participantEmail">The email of the user to add.</param>
     /// <param name="organizerId">The ID of the user performing the action (must be the organizer).</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>True if the participant was added successfully; otherwise, false.</returns>
-    Task<bool> AddParticipantAsync(Guid meetingId, string participantEmail, Guid organizerId, CancellationToken cancellationToken = default);
+    /// <returns>
+    /// A tuple containing the true status and a null error message on success.
+    /// On failure, returns false status and a descriptive error message.
+    /// </returns>
+    Task<(bool Status, string? ErrorMessage)> AddParticipantAsync(Guid meetingId, string participantEmail, Guid organizerId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Removes a participant from a meeting. Only the organizer can perform this action.
@@ -79,8 +85,11 @@ public interface IMeetingService
     /// <param name="participantId">The ID of the participant to remove.</param>
     /// <param name="organizerId">The ID of the user performing the action (must be the organizer).</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>True if the participant was removed successfully; otherwise, false.</returns>
-    Task<bool> RemoveParticipantAsync(Guid meetingId, Guid participantId, Guid organizerId, CancellationToken cancellationToken = default);
+    /// <returns>
+    /// A tuple containing the true status and a null error message on success.
+    /// On failure, returns false status and a descriptive error message.
+    /// </returns>
+    Task<(bool Status, string? ErrorMessage)> RemoveParticipantAsync(Guid meetingId, Guid participantId, Guid organizerId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -109,21 +118,27 @@ public class MeetingService : IMeetingService
     }
 
     /// <inheritdoc />
-    public async Task<MeetingDto> CreateMeetingAsync(CreateMeetingDto dto, Guid organizerId, CancellationToken cancellationToken = default)
+    public async Task<MeetingDto?> CreateMeetingAsync(CreateMeetingDto dto, Guid organizerId, bool commit = true, CancellationToken cancellationToken = default)
     {
         var organizer = await _unitOfWork.Users
             .Find(u => u.Id == organizerId)
             .AsNoTracking()
-            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .Select(u => new { u.Id, u.Email })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         if (organizer == null)
         {
+            // Throwing here is acceptable as an invalid organizer ID is an exceptional state.
             throw new InvalidOperationException($"Organizer with ID {organizerId} not found.");
         }
 
-        await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        if (commit)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        Guid newMeetingId;
         try
         {
             var meeting = new Meeting
@@ -135,11 +150,10 @@ public class MeetingService : IMeetingService
                 EndAt = dto.EndAt.ToUniversalTime(),
                 OrganizerId = organizerId
             };
+            newMeetingId = meeting.Id;
             _unitOfWork.Meetings.Add(meeting);
 
-            // 1. Prepare a distinct list of emails to invite, always including the organizer at first.
-            var emailsToInvite = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            emailsToInvite.Add(organizer.Email); // Always include the organizer first
+            var emailsToInvite = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { organizer.Email };
             if (dto.ParticipantEmails != null)
             {
                 foreach (var email in dto.ParticipantEmails)
@@ -148,83 +162,79 @@ public class MeetingService : IMeetingService
                 }
             }
 
-            // 2. Perform a single database query to find all valid users for the invite list.
             var usersToInvite = await _unitOfWork.Users
                 .Find(u => emailsToInvite.Contains(u.Email))
-                .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+                .Select(u => u.Id)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            // 3. Create the participant records and the final DTO list.
-            var participantDtos = new List<ParticipantDto>();
-            foreach (var user in usersToInvite)
+            foreach (var userId in usersToInvite)
             {
                 _unitOfWork.MeetingParticipants.Add(new MeetingParticipant 
                 {
-                    MeetingId = meeting.Id,
-                    UserId = user.Id,
-                    Role = (user.Id == organizer.Id) ? "Organizer" : "Participant",
+                    MeetingId = newMeetingId,
+                    UserId = userId,
+                    Role = (userId == organizer.Id) ? "Organizer" : "Participant",
                 });
-                participantDtos.Add(new ParticipantDto(user.Id, user.FirstName, user.LastName, user.Email));
             }
-            
-            await _unitOfWork.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            if (commit)
+            {
+                await _unitOfWork.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             var reminderTime = meeting.StartAt.AddMinutes(-20);
             if (reminderTime > DateTime.UtcNow)
             {
                 _backgroundJobClient.Schedule<IMeetingJobs>(
-                    job => job.SendReminderAsync(meeting.Id, CancellationToken.None), 
+                    job => job.SendReminderAsync(newMeetingId, CancellationToken.None), 
                     reminderTime);
             }
-
-            return new MeetingDto(
-                meeting.Id, 
-                meeting.Name, 
-                meeting.Description, 
-                meeting.StartAt, 
-                meeting.EndAt, 
-                meeting.OrganizerId, 
-                meeting.IsCanceled,
-                participantDtos
-            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create meeting for organizer {OrganizerId}", organizerId);
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+            if (commit)
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+            }
             throw;
         }
+
+        // Adhere to DRY by reusing the canonical Get method to build the response DTO.
+        return await GetMeetingByIdAsync(newMeetingId, organizerId, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public Task<MeetingDto?> GetMeetingByIdAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default)
     {
-        // This query now eagerly loads the Participants and their related User data.
         return _unitOfWork.Meetings
-        .Find(m => m.Id == meetingId && m.Participants.Any(p => p.UserId == userId))
-        .Include(m => m.Participants) // <-- 1. Include the join table
-            .ThenInclude(p => p.User) // <-- 2. Then include the User from the join table
-        .Select(m => new MeetingDto(
-            m.Id,
-            m.Name,
-            m.Description,
-            m.StartAt,
-            m.EndAt,
-            m.OrganizerId,
-            m.IsCanceled,
-            // 3. Project the included data into the new ParticipantDto
-            m.Participants
-                .OrderByDescending(p => p.UserId == m.OrganizerId)
-                .ThenBy(p => p.AddedAt)
-                .Select(p => new ParticipantDto(
-                    p.UserId,
-                    p.User!.FirstName,
-                    p.User!.LastName,
-                    p.User!.Email
-                )).ToList()
-        ))
-        .FirstOrDefaultAsync(cancellationToken);
+            .Find(m => m.Id == meetingId && m.Participants.Any(p => p.UserId == userId))
+            .Include(m => m.Participants)
+                .ThenInclude(p => p.User)
+            .Select(m => new MeetingDto(
+                m.Id,
+                m.Name,
+                m.Description,
+                m.StartAt,
+                m.EndAt,
+                m.OrganizerId,
+                m.IsCanceled,
+                m.Participants
+                    .OrderByDescending(p => p.UserId == m.OrganizerId)
+                    .ThenBy(p => p.AddedAt)
+                    .Select(p => new ParticipantDto(
+                        p.UserId,
+                        p.User!.FirstName,
+                        p.User!.LastName,
+                        p.User!.Email
+                    )).ToList()
+            ))
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -243,9 +253,7 @@ public class MeetingService : IMeetingService
                 m.OrganizerId,
                 m.IsCanceled,
                 m.Participants
-                    // 1. Primary Sort: The organizer always comes first.
                     .OrderByDescending(p => p.UserId == m.OrganizerId) 
-                    // 2. Secondary Sort: All other participants are sorted by when they were added.
                     .ThenBy(p => p.AddedAt) 
                     .Select(p => new ParticipantDto(
                         p.UserId,
@@ -261,7 +269,6 @@ public class MeetingService : IMeetingService
     /// <inheritdoc />
     public async Task<(MeetingDto? Meeting, string? ErrorMessage)> UpdateMeetingAsync(Guid meetingId, UpdateMeetingDto dto, Guid userId, CancellationToken cancellationToken = default)
     {
-        // Find the meeting first to verify ownership.
         var meeting = await _unitOfWork.Meetings
             .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
@@ -269,92 +276,125 @@ public class MeetingService : IMeetingService
 
         if (meeting == null)
         {
-            _logger.LogWarning("Update failed: Meeting {MeetingId} not found or user {UserId} is not the organizer.", meetingId, userId);
+            _logger.LogWarning("Update failed: Meeting {MeetingId} not found.", meetingId);
             return (null, "Meeting not found");
         }
 
         if (meeting.OrganizerId != userId)
         {
             _logger.LogWarning("Update failed: User {UserId} is not the organizer of meeting {MeetingId}.", userId, meetingId);
-            return (null, "Not authorized: User is not the organizer");
+            return (null, "User is not authorized to update this meeting.");
         }
 
-        // Apply the updates to the tracked entity.
         meeting.Name = dto.Name;
         meeting.Description = dto.Description;
         meeting.StartAt = dto.StartAt.ToUniversalTime();
         meeting.EndAt = dto.EndAt.ToUniversalTime();
 
-        // Save the changes.
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
         return (await GetMeetingByIdAsync(meetingId, userId, cancellationToken).ConfigureAwait(false), null);
     }
 
     /// <inheritdoc />
-    public async Task<bool> CancelMeetingAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default)
+    public async Task<(bool Status, string? ErrorMessage)> CancelMeetingAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default)
     {
         var meeting = await _unitOfWork.Meetings
-            .Find(m => m.Id == meetingId && m.OrganizerId == userId)
+            .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
         if (meeting == null)
         {
-            _logger.LogWarning("Cancel failed: Meeting {MeetingId} not found or user {UserId} is not the organizer.", meetingId, userId);
-            return false;
+            _logger.LogWarning("Cancel failed: Meeting {MeetingId} not found.", meetingId);
+            return (false, "Meeting not found.");
+        }
+        
+        if (meeting.OrganizerId != userId)
+        {
+            _logger.LogWarning("Cancel failed: User {UserId} is not the organizer of meeting {MeetingId}.", userId, meetingId);
+            return (false, "User is not authorized to cancel this meeting.");
         }
 
         meeting.IsCanceled = true;
         meeting.CanceledAt = DateTime.UtcNow;
 
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
-        return true;
+        return (true, null); // Success
     }
 
     /// <inheritdoc />
-    public async Task<bool> AddParticipantAsync(Guid meetingId, string participantEmail, Guid organizerId, CancellationToken cancellationToken = default)
+    public async Task<(bool Status, string? ErrorMessage)> AddParticipantAsync(Guid meetingId, string participantEmail, Guid organizerId, CancellationToken cancellationToken = default)
     {
         var meeting = await _unitOfWork.Meetings
-            .Find(m => m.Id == meetingId && m.OrganizerId == organizerId)
+            .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
             
-        if (meeting == null) return false;
+        if (meeting == null)
+        {
+            _logger.LogWarning("Add participant failed: Meeting {MeetingId} not found.", meetingId);
+            return (false, "Meeting not found.");
+        }
+
+        if (meeting.OrganizerId != organizerId)
+        {
+            _logger.LogWarning("Add participant failed: User {organizerId} is not authorized to add participants to this meeting {MeetingId}.", organizerId, meetingId);
+            return (false, "User is not authorized to add participants to this meeting.");
+        }
 
         var userToAdd = await _unitOfWork.Users
             .Find(u => u.Email == participantEmail)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
             
-        if (userToAdd == null) return false;
+        if (userToAdd == null)
+        {
+            _logger.LogWarning("Add participant failed: Participant user {participantEmail} not found.", participantEmail);
+            return (false, "Participant user not found.");
+        }
 
         var alreadyExists = await _unitOfWork.MeetingParticipants
             .Find(p => p.MeetingId == meetingId && p.UserId == userToAdd.Id)
             .AnyAsync(cancellationToken)
             .ConfigureAwait(false);
             
-        if (alreadyExists) return true; // Operation is idempotent
+        if (alreadyExists)
+        {
+            return (true, null); // Operation is idempotent, success.
+        }
 
         var participant = new MeetingParticipant { MeetingId = meetingId, UserId = userToAdd.Id , Role = "Participant" };
         _unitOfWork.MeetingParticipants.Add(participant);
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
         
-        return true;
+        return (true, null); // Success
     }
 
     /// <inheritdoc />
-    public async Task<bool> RemoveParticipantAsync(Guid meetingId, Guid participantId, Guid organizerId, CancellationToken cancellationToken = default)
+    public async Task<(bool Status, string? ErrorMessage)> RemoveParticipantAsync(Guid meetingId, Guid participantId, Guid organizerId, CancellationToken cancellationToken = default)
     {
         var meeting = await _unitOfWork.Meetings
-            .Find(m => m.Id == meetingId && m.OrganizerId == organizerId)
+            .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
             
-        if (meeting == null || participantId == organizerId)
+        if (meeting == null)
         {
-            // Fail if not organizer or if trying to remove self.
-            return false;
+            _logger.LogWarning("Remove participant failed: Meeting {MeetingId} not found.", meetingId);
+            return (false, "Meeting not found.");
+        }
+
+        if (meeting.OrganizerId != organizerId)
+        {
+            _logger.LogWarning("Remove participant failed: User {organizerId} is not authorized to remove participants from this meeting {MeetingId}.", organizerId, meetingId);
+            return (false, "User is not authorized to remove participants from this meeting.");
+        }
+
+        if (participantId == organizerId)
+        {
+            _logger.LogWarning("Remove participant failed: The organizer {organizerId} cannot be removed from their own meeting {MeetingId}.", organizerId, meetingId);
+            return (false, "The organizer cannot be removed from their own meeting.");
         }
 
         var participant = await _unitOfWork.MeetingParticipants
@@ -362,11 +402,15 @@ public class MeetingService : IMeetingService
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
             
-        if (participant == null) return false;
+        if (participant == null)
+        {
+            _logger.LogWarning("Remove participant failed: Participant user {participantEmail} not found in this meeting {MeetingId}.", participantId, meetingId);
+            return (false, "Participant not found in this meeting.");
+        }
 
         _unitOfWork.MeetingParticipants.Remove(participant);
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
-        return true;
+        return (true, null); // Success
     }
 }

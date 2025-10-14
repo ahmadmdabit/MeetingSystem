@@ -25,9 +25,10 @@ public interface IAuthService
     /// Registers a new user in the system with a default 'User' role.
     /// </summary>
     /// <param name="dto">The data transfer object containing user registration information.</param>
+    /// <param name="commit">A boolean indicating whether to commit the transaction.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A tuple indicating success and a corresponding message.</returns>
-    Task<(bool Success, string Message)> RegisterAsync(RegisterUserDto dto, CancellationToken cancellationToken = default);
+    Task<(bool Success, string Message)> RegisterAsync(RegisterUserDto dto, bool commit = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Authenticates a user and generates a JWT containing their roles.
@@ -81,9 +82,12 @@ public class AuthService : IAuthService
     }
 
     /// <inheritdoc />
-    public async Task<(bool Success, string Message)> RegisterAsync(RegisterUserDto dto, CancellationToken cancellationToken = default)
+    public async Task<(bool Success, string Message)> RegisterAsync(RegisterUserDto dto, bool commit = true, CancellationToken cancellationToken = default)
     {
-        await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        if (commit)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        }
         try
         {
             var userExists = await _unitOfWork.Users.Find(u => u.Email == dto.Email).AnyAsync(cancellationToken).ConfigureAwait(false);
@@ -113,7 +117,7 @@ public class AuthService : IAuthService
             {
                 try
                 {
-                    await _profilePictureService.SetAsync(user.Id, dto.ProfilePicture, cancellationToken).ConfigureAwait(false);
+                    await _profilePictureService.SetAsync(user.Id, dto.ProfilePicture, false, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -131,8 +135,15 @@ public class AuthService : IAuthService
             }
             
             _unitOfWork.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = userRole.Id });
-            
-            await _unitOfWork.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            if (commit)
+            {
+                await _unitOfWork.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             _backgroundJobClient.Enqueue<IEmailService>(
                 emailService => emailService.SendWelcomeEmailAsync(user.Email, user.FirstName, CancellationToken.None));
@@ -142,7 +153,10 @@ public class AuthService : IAuthService
         catch (Exception ex)
         {
             _logger.LogError(ex, "An error occurred during user registration for email {Email}.", dto.Email);
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+            if (commit)
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+            }
             return (false, "An unexpected error occurred during registration.");
         }
     }

@@ -1,4 +1,4 @@
-﻿using System.Linq.Expressions;
+using System.Linq.Expressions;
 
 using FluentAssertions;
 
@@ -66,17 +66,17 @@ public class MeetingServiceTests
         var nonExistentOrganizerId = Guid.NewGuid();
 
         // Act
-        Func<Task> act = async () => await _meetingService.CreateMeetingAsync(dto, nonExistentOrganizerId, CancellationToken.None);
+        Func<Task> act = async () => await _meetingService.CreateMeetingAsync(dto, nonExistentOrganizerId, true, CancellationToken.None);
 
         // Assert
         act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     /// <summary>
-    /// Verifies that GetMeetingByIdAsync returns null if the user is not a participant.
+    /// Verifies that UpdateMeetingAsync fails if the user is not the meeting organizer.
     /// </summary>
     [Test]
-    public async Task GetMeetingByIdAsync_WhenUserIsNotParticipant_ReturnsNull()
+    public async Task UpdateMeetingAsync_WhenUserIsNotOrganizer_ReturnsError()
     {
         // Arrange
         var organizer = await CreateUserAsync("org@test.com");
@@ -89,7 +89,7 @@ public class MeetingServiceTests
 
         // Assert
         updatedMeeting.Should().BeNull();
-        errorMessage.Should().Be("Not authorized: User is not the organizer");
+        errorMessage.Should().Be("User is not authorized to update this meeting.");
     }
 
     /// <summary>
@@ -126,7 +126,7 @@ public class MeetingServiceTests
         var result = await _meetingService.CancelMeetingAsync(meeting.Id, nonOrganizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public class MeetingServiceTests
         var result = await _meetingService.AddParticipantAsync(meeting.Id, "nonexistent@example.com", organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -161,7 +161,7 @@ public class MeetingServiceTests
         var result = await _meetingService.RemoveParticipantAsync(meeting.Id, userToRemove.Id, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -182,11 +182,11 @@ public class MeetingServiceTests
         );
 
         // Act
-        var resultDto = await _meetingService.CreateMeetingAsync(dto, organizer.Id, CancellationToken.None);
+        var resultDto = await _meetingService.CreateMeetingAsync(dto, organizer.Id, true, CancellationToken.None);
 
         // Assert
         resultDto.Should().NotBeNull();
-        resultDto.Name.Should().Be(dto.Name);
+        resultDto!.Name.Should().Be(dto.Name);
         resultDto.Participants.Should().HaveCount(2); // Organizer + 1 participant
 
         // Verify database state
@@ -279,7 +279,7 @@ public class MeetingServiceTests
         var result = await _meetingService.CancelMeetingAsync(meeting.Id, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().BeTrue();
         var meetingInDb = await _dbContext.Meetings.FindAsync(meeting.Id);
         meetingInDb!.IsCanceled.Should().BeTrue();
         meetingInDb.CanceledAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
@@ -300,7 +300,7 @@ public class MeetingServiceTests
         var result = await _meetingService.AddParticipantAsync(meeting.Id, userToAdd.Email, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().BeTrue();
         (await _dbContext.MeetingParticipants.AnyAsync(p => p.MeetingId == meeting.Id && p.UserId == userToAdd.Id)).Should().BeTrue();
     }
 
@@ -321,7 +321,7 @@ public class MeetingServiceTests
         var result = await _meetingService.AddParticipantAsync(meeting.Id, existingParticipant.Email, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().BeTrue();
     }
 
     /// <summary>
@@ -340,7 +340,7 @@ public class MeetingServiceTests
         var result = await _meetingService.RemoveParticipantAsync(meeting.Id, organizer.Id, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -360,7 +360,7 @@ public class MeetingServiceTests
         var result = await _meetingService.RemoveParticipantAsync(meeting.Id, participantToRemove.Id, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().BeTrue();
         (await _dbContext.MeetingParticipants.AnyAsync(p => p.UserId == participantToRemove.Id)).Should().BeFalse();
     }
 
@@ -375,60 +375,36 @@ public class MeetingServiceTests
         var organizer = new User { Id = organizerId, Email = "organizer@test.com", FirstName = "Org", LastName = "User", Phone = "123", PasswordHash = "hash" };
         var dto = new CreateMeetingDto("Test", "Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), null);
 
-        // 1. Create in-memory lists for your test data.
         var users = new List<User> { organizer };
-        var roles = new List<Role> { new Role { Id = Guid.NewGuid(), Name = "User" } };
-        var userRoles = new List<UserRole>();
         var meetings = new List<Meeting>();
         var participants = new List<MeetingParticipant>();
 
-        // 2. Use MockQueryable.Moq to build async-capable mock DbSets from the lists.
         var mockUserDbSet = users.BuildMockDbSet();
-        var mockRoleDbSet = roles.BuildMockDbSet();
-        var mockUserRoleDbSet = userRoles.BuildMockDbSet();
         var mockMeetingDbSet = meetings.BuildMockDbSet();
         var mockParticipantDbSet = participants.BuildMockDbSet();
 
-        // 3. Create a mock DbContext.
         var mockDbContext = new Mock<MeetingSystemDbContext>();
-
-        // 4. Set up the virtual DbSet properties.
         mockDbContext.Setup(c => c.Users).Returns(mockUserDbSet.Object);
-        mockDbContext.Setup(c => c.Roles).Returns(mockRoleDbSet.Object);
-        mockDbContext.Setup(c => c.UserRoles).Returns(mockUserRoleDbSet.Object);
         mockDbContext.Setup(c => c.Meetings).Returns(mockMeetingDbSet.Object);
         mockDbContext.Setup(c => c.MeetingParticipants).Returns(mockParticipantDbSet.Object);
-
-        // 5. Set up the generic Set<T>() method to return the correct mock DbSet for each type.
-        // This is what the GenericRepository constructor calls.
         mockDbContext.Setup(c => c.Set<User>()).Returns(mockUserDbSet.Object);
-        mockDbContext.Setup(c => c.Set<Role>()).Returns(mockRoleDbSet.Object);
-        mockDbContext.Setup(c => c.Set<UserRole>()).Returns(mockUserRoleDbSet.Object);
         mockDbContext.Setup(c => c.Set<Meeting>()).Returns(mockMeetingDbSet.Object);
         mockDbContext.Setup(c => c.Set<MeetingParticipant>()).Returns(mockParticipantDbSet.Object);
 
-        // 6. Mock the DatabaseFacade to handle transaction calls.
         var mockTransaction = new Mock<IDbContextTransaction>();
         var mockDatabaseFacade = new Mock<DatabaseFacade>(mockDbContext.Object);
         mockDatabaseFacade.Setup(db => db.BeginTransactionAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(mockTransaction.Object);
         mockDbContext.Setup(c => c.Database).Returns(mockDatabaseFacade.Object);
 
-        // 7. Setup SaveChangesAsync to throw the exception we want to test.
-        // We need to mock both overloads of SaveChangesAsync.
         mockDbContext.Setup(c => c.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new DbUpdateException("Simulated DB error during commit."));
-        mockDbContext.Setup(c => c.SaveChangesAsync(true, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new DbUpdateException("Simulated DB error during commit."));
 
-        // 8. Create a real UnitOfWork that uses our fully mocked DbContext.
         var unitOfWork = new UnitOfWork(mockDbContext.Object, Mock.Of<ILogger<UnitOfWork>>());
-
-        // 9. Create the service instance.
         var meetingService = new MeetingService(unitOfWork, _backgroundJobClientMock.Object, _loggerMock.Object);
 
         // Act
-        Func<Task> act = async () => await meetingService.CreateMeetingAsync(dto, organizer.Id, CancellationToken.None);
+        Func<Task> act = async () => await meetingService.CreateMeetingAsync(dto, organizer.Id, true, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<DbUpdateException>();
@@ -445,11 +421,11 @@ public class MeetingServiceTests
         var dto = new CreateMeetingDto("Solo Meeting", "Desc", DateTime.UtcNow.AddHours(1), DateTime.UtcNow.AddHours(2), null); // ParticipantEmails is null
 
         // Act
-        var resultDto = await _meetingService.CreateMeetingAsync(dto, organizer.Id, CancellationToken.None);
+        var resultDto = await _meetingService.CreateMeetingAsync(dto, organizer.Id, true, CancellationToken.None);
 
         // Assert
         resultDto.Should().NotBeNull();
-        resultDto.Participants.Should().HaveCount(1); // Only the organizer
+        resultDto!.Participants.Should().HaveCount(1); // Only the organizer
         resultDto.Participants.First().UserId.Should().Be(organizer.Id);
     }
 
@@ -468,7 +444,7 @@ public class MeetingServiceTests
         var result = await _meetingService.AddParticipantAsync(nonExistentMeetingId, userToAdd.Email, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -486,7 +462,7 @@ public class MeetingServiceTests
         var result = await _meetingService.RemoveParticipantAsync(nonExistentMeetingId, userToRemove.Id, organizer.Id, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
     }
 
     /// <summary>
@@ -497,7 +473,6 @@ public class MeetingServiceTests
     {
         // Arrange
         var nonExistentOrganizerId = Guid.NewGuid();
-        // Create a participant so the DTO is valid, but don't create the organizer.
         var participant = await CreateUserAsync("participant@test.com");
         var dto = new CreateMeetingDto(
             "Test Meeting",
@@ -507,14 +482,74 @@ public class MeetingServiceTests
             new[] { participant.Email });
 
         // Act
-        Func<Task> act = async () => await _meetingService.CreateMeetingAsync(dto, nonExistentOrganizerId, CancellationToken.None);
+        Func<Task> act = async () => await _meetingService.CreateMeetingAsync(dto, nonExistentOrganizerId, true, CancellationToken.None);
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
                  .WithMessage($"Organizer with ID {nonExistentOrganizerId} not found.");
 
-        // Verify no meeting was created
         (await _dbContext.Meetings.CountAsync()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// Verifies that CancelMeetingAsync returns a failure when the target meeting does not exist.
+    /// </summary>
+    [Test]
+    public async Task CancelMeetingAsync_WhenMeetingNotFound_ReturnsFailure()
+    {
+        // Arrange
+        var userId = Guid.NewGuid();
+        var nonExistentMeetingId = Guid.NewGuid();
+
+        // Act
+        var (status, message) = await _meetingService.CancelMeetingAsync(nonExistentMeetingId, userId, CancellationToken.None);
+
+        // Assert
+        status.Should().BeFalse();
+        message.Should().Be("Meeting not found.");
+    }
+
+    /// <summary>
+    /// Verifies that a non-organizer cannot remove a participant.
+    /// </summary>
+    [Test]
+    public async Task RemoveParticipantAsync_WhenUserIsNotOrganizer_ReturnsFailure()
+    {
+        // Arrange
+        var organizer = await CreateUserAsync("org@test.com");
+        var participant = await CreateUserAsync("participant@test.com");
+        var nonOrganizer = await CreateUserAsync("non-organizer@test.com");
+        var meeting = await CreateMeetingAsync(organizer.Id);
+        _dbContext.MeetingParticipants.AddRange(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id }, new MeetingParticipant { MeetingId = meeting.Id, UserId = participant.Id });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var (status, message) = await _meetingService.RemoveParticipantAsync(meeting.Id, participant.Id, nonOrganizer.Id, CancellationToken.None);
+
+        // Assert
+        status.Should().BeFalse();
+        message.Should().Be("User is not authorized to remove participants from this meeting.");
+    }
+
+    // ***** NEW TEST CASE TO COVER MISSING BRANCH *****
+    /// <summary>
+    /// Verifies that a non-organizer cannot add a participant to a meeting.
+    /// </summary>
+    [Test]
+    public async Task AddParticipantAsync_WhenUserIsNotOrganizer_ReturnsFailure()
+    {
+        // Arrange
+        var organizer = await CreateUserAsync("org@test.com");
+        var nonOrganizer = await CreateUserAsync("non-organizer@test.com");
+        var userToAdd = await CreateUserAsync("new-user@test.com");
+        var meeting = await CreateMeetingAsync(organizer.Id);
+
+        // Act: The non-organizer is attempting the action.
+        var (status, message) = await _meetingService.AddParticipantAsync(meeting.Id, userToAdd.Email, nonOrganizer.Id, CancellationToken.None);
+
+        // Assert
+        status.Should().BeFalse();
+        message.Should().Be("User is not authorized to add participants to this meeting.");
     }
 
     #region Helper Methods

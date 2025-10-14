@@ -41,7 +41,7 @@ public class UserProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> Set(IFormFile file, CancellationToken cancellationToken)
     {
-        await _profilePictureService.SetAsync(GetUserId(), file, cancellationToken).ConfigureAwait(false);
+        await _profilePictureService.SetAsync(GetUserId(), file, true, cancellationToken).ConfigureAwait(false);
         return NoContent();
     }
 
@@ -54,7 +54,7 @@ public class UserProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Remove(CancellationToken cancellationToken)
     {
-        var success = await _profilePictureService.RemoveAsync(GetUserId(), cancellationToken).ConfigureAwait(false);
-        return success ? NoContent() : NotFound("Profile picture not found or already removed.");
+        var (success, errorMessage) = await _profilePictureService.RemoveAsync(GetUserId(), true, cancellationToken).ConfigureAwait(false);
+        return success ? NoContent() : NotFound(errorMessage);
     }
 }

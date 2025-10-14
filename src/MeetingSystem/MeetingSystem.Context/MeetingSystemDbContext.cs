@@ -78,7 +78,7 @@ public class MeetingSystemDbContext : DbContext, IDataProtectionKeyContext
         // ...... Meeting Configuration ......
         modelBuilder.Entity<Meeting>(entity =>
         {
-            entity.ToTable("Meetings");
+            entity.ToTable("Meetings", tb => tb.UseSqlOutputClause(false));
             entity.Property(m => m.Name).HasMaxLength(200);
             entity.Property(m => m.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
 
@@ -128,6 +128,7 @@ public class MeetingSystemDbContext : DbContext, IDataProtectionKeyContext
         modelBuilder.Entity<MeetingsLog>(entity =>
         {
             entity.ToTable("LogMeetings");
+            entity.Property(l => l.LogId).HasDefaultValueSql("NEWID()");
             entity.Property(l => l.DeletedAt).HasDefaultValueSql("GETUTCDATE()");
         });
 

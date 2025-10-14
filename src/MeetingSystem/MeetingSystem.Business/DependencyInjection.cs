@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IMeetingFileService, MeetingFileService>();
         services.AddScoped<IMeetingJobs, MeetingJobs>();
         services.AddScoped<IMeetingService, MeetingService>();
+        services.AddScoped<IMeetingCleanupService, MeetingCleanupService>();
 
         return services;
     }

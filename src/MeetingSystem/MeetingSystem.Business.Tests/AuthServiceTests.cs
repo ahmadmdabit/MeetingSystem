@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
@@ -227,7 +227,7 @@ public class AuthServiceTests
         await SeedRoles();
         _passwordHasherMock.Setup(p => p.HashPassword(It.IsAny<User>(), dto.Password)).Returns("hashed_password");
 
-        _profilePictureServiceMock.Setup(s => s.SetAsync(It.IsAny<Guid>(), dto.ProfilePicture!, It.IsAny<CancellationToken>()))
+        _profilePictureServiceMock.Setup(s => s.SetAsync(It.IsAny<Guid>(), dto.ProfilePicture!, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("MinIO upload failed"));
 
         // Act
@@ -294,8 +294,8 @@ public class AuthServiceTests
 
         // Setup the profile picture service to succeed
         _profilePictureServiceMock
-            .Setup(s => s.SetAsync(It.IsAny<Guid>(), dto.ProfilePicture!, It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
+            .Setup(s => s.SetAsync(It.IsAny<Guid>(), dto.ProfilePicture!, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((true, null as string));
 
         // Act
         var (success, message) = await _authService.RegisterAsync(dto);
@@ -306,7 +306,7 @@ public class AuthServiceTests
 
         // Verify the service was called
         _profilePictureServiceMock.Verify(
-            s => s.SetAsync(It.IsAny<Guid>(), profilePictureMock.Object, It.IsAny<CancellationToken>()),
+            s => s.SetAsync(It.IsAny<Guid>(), profilePictureMock.Object, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }    
     

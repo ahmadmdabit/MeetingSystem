@@ -1,13 +1,8 @@
-using System;
-using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MeetingSystem.Api.Controllers;
@@ -49,11 +44,17 @@ public class MeetingFilesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> Upload(Guid meetingId, IFormFileCollection files, CancellationToken cancellationToken)
     {
-        var (fileDtos, error) = await _meetingFileService.UploadAsync(meetingId, files, GetUserId(), cancellationToken).ConfigureAwait(false);
-        if (error != null)
+        var (fileDtos, errorMessage) = await _meetingFileService.UploadAsync(meetingId, files, GetUserId(), true, cancellationToken).ConfigureAwait(false);
+        
+        if (!string.IsNullOrWhiteSpace(errorMessage))
         {
-            return Forbid(error);
+            if (errorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return NotFound(errorMessage);
+            }
+            return Forbid(errorMessage!);
         }
+
         return Ok(fileDtos);
     }
 
@@ -72,7 +73,7 @@ public class MeetingFilesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Remove(Guid meetingId, Guid fileId, CancellationToken cancellationToken)
     {
-        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meetingId, fileId, GetUserId(), cancellationToken).ConfigureAwait(false);
+        var (success, errorMessage) = await _meetingFileService.RemoveAsync(meetingId, fileId, GetUserId(), true, cancellationToken).ConfigureAwait(false);
         
         if (!success)
         {

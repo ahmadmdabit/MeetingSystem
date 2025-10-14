@@ -1,10 +1,7 @@
 ﻿using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.JsonWebTokens;
 
@@ -33,9 +30,9 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register([FromForm] RegisterUserDto dto, CancellationToken cancellationToken)
+    public async Task<IActionResult> Register([FromBody] RegisterUserDto dto, CancellationToken cancellationToken)
     {
-        var (success, message) = await _authService.RegisterAsync(dto, cancellationToken).ConfigureAwait(false);
+        var (success, message) = await _authService.RegisterAsync(dto, true, cancellationToken).ConfigureAwait(false);
         if (!success)
         {
             return BadRequest(new { Message = message });

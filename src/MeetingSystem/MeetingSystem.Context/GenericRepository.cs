@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace MeetingSystem.Context;
 
@@ -16,6 +17,13 @@ public interface IGenericRepository<T> where T : class
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>The entity, or null if not found.</returns>
     ValueTask<T?> GetByIdAsync(object id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the number of entities in the repository.
+    /// </summary>
+    /// <param name="predicate">An optional predicate to filter the entities.</param>
+    /// <returns>The number of entities matching the predicate, or the total number of entities if no predicate is provided.</returns>
+    Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null);
 
     /// <summary>
     /// Gets all entities of this type.
@@ -37,10 +45,22 @@ public interface IGenericRepository<T> where T : class
     void Add(T entity);
 
     /// <summary>
+    /// Adds multiple entities to the context.
+    /// </summary>
+    /// <param name="entities"></param>
+    void AddRange(IEnumerable<T> entities);
+
+    /// <summary>
     /// Removes an entity from the context.
     /// </summary>
     /// <param name="entity">The entity to remove.</param>
     void Remove(T entity);
+
+    /// <summary>
+    /// Removes multiple entities from the context.
+    /// </summary>
+    /// <param name="entities">The entities to remove.</param>
+    void RemoveRange(IEnumerable<T> entities);
 }
 
 /// <summary>
@@ -63,8 +83,11 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
     }
 
     /// <inheritdoc />
-    public virtual ValueTask<T?> GetByIdAsync(object id, CancellationToken cancellationToken = default) => 
-        _dbSet.FindAsync(new[] { id }, cancellationToken);
+    public ValueTask<T?> GetByIdAsync(object id, CancellationToken cancellationToken = default) => 
+        _dbSet.FindAsync([id], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<int> CountAsync(Expression<Func<T, bool>>? predicate = null) => predicate == null ? _dbSet.CountAsync() : _dbSet.CountAsync(predicate);
 
     /// <inheritdoc />
     public IQueryable<T> GetAll() => _dbSet.AsQueryable();
@@ -76,5 +99,11 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
     public void Add(T entity) => _dbSet.Add(entity);
 
     /// <inheritdoc />
+    public void AddRange(IEnumerable<T> entities) => _dbSet.AddRange(entities);
+
+    /// <inheritdoc />
     public void Remove(T entity) => _dbSet.Remove(entity);
+
+    /// <inheritdoc />
+    public void RemoveRange(IEnumerable<T> entities) => _dbSet.RemoveRange(entities);
 }

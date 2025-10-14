@@ -45,6 +45,10 @@ public static class DependencyInjection
             .BindConfiguration(MinioSettings.SectionName)
             .ValidateDataAnnotations();
 
+        services.AddOptions<HangfireSettings>()
+            .BindConfiguration(HangfireSettings.SectionName)
+            .ValidateDataAnnotations();
+
         return services;
     }
 
@@ -60,13 +64,19 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")!;
 
+        var hangfireSettings = configuration.GetSection(HangfireSettings.SectionName).Get<HangfireSettings>() 
+                               ?? HangfireSettings.Default;
+
         services.AddHangfire(config => config
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
             .UseSqlServerStorage(connectionString));
 
-        services.AddHangfireServer();
+        services.AddHangfireServer(options =>
+        {
+            options.WorkerCount = hangfireSettings.WorkerCount;
+        });
 
         return services;
     }

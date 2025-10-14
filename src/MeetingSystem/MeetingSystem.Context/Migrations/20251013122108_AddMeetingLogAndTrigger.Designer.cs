@@ -4,6 +4,7 @@ using MeetingSystem.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MeetingSystem.Context.Migrations
 {
     [DbContext(typeof(MeetingSystemDbContext))]
-    partial class MeetingSystemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251013122108_AddMeetingLogAndTrigger")]
+    partial class AddMeetingLogAndTrigger
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -62,8 +65,6 @@ namespace MeetingSystem.Context.Migrations
                     b.HasIndex("OrganizerId");
 
                     b.ToTable("Meetings", (string)null);
-
-                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("MeetingSystem.Model.MeetingFile", b =>
@@ -134,8 +135,7 @@ namespace MeetingSystem.Context.Migrations
                 {
                     b.Property<Guid>("LogId")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier")
-                        .HasDefaultValueSql("NEWID()");
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("DeletedAt")
                         .ValueGeneratedOnAdd()

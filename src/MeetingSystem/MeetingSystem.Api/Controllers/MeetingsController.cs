@@ -51,8 +51,8 @@ public class MeetingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> CreateMeeting([FromBody] CreateMeetingDto dto, CancellationToken cancellationToken)
     {
-        var meeting = await _meetingService.CreateMeetingAsync(dto, GetUserId(), cancellationToken).ConfigureAwait(false);
-        return CreatedAtAction(nameof(GetMeetingById), new { id = meeting.Id }, meeting);
+        var meeting = await _meetingService.CreateMeetingAsync(dto, GetUserId(), true, cancellationToken).ConfigureAwait(false);
+        return CreatedAtAction(nameof(GetMeetingById), new { id = meeting!.Id }, meeting);
     }
 
     /// <summary>
@@ -129,8 +129,18 @@ public class MeetingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CancelMeeting(Guid id, CancellationToken cancellationToken)
     {
-        var success = await _meetingService.CancelMeetingAsync(id, GetUserId(), cancellationToken).ConfigureAwait(false);
-        return success ? NoContent() : Forbid();
+        var (success, errorMessage) = await _meetingService.CancelMeetingAsync(id, GetUserId(), cancellationToken).ConfigureAwait(false);
+
+        if (!success)
+        {
+            if (errorMessage?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return NotFound(errorMessage);
+            }
+            return Forbid(errorMessage!);
+        }
+
+        return NoContent();
     }
 
     /// <summary>
@@ -148,8 +158,8 @@ public class MeetingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> AddParticipant(Guid id, [FromBody] AddParticipantDto dto, CancellationToken cancellationToken)
     {
-        var success = await _meetingService.AddParticipantAsync(id, dto.Email, GetUserId(), cancellationToken).ConfigureAwait(false);
-        return success ? Ok() : BadRequest("Failed to add participant. The user may not exist or you may not be the organizer.");
+        var (success, errorMessage) = await _meetingService.AddParticipantAsync(id, dto.Email, GetUserId(), cancellationToken).ConfigureAwait(false);
+        return success ? Ok() : BadRequest(errorMessage);
     }
 
     /// <summary>
@@ -167,7 +177,7 @@ public class MeetingsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> RemoveParticipant(Guid id, Guid userId, CancellationToken cancellationToken)
     {
-        var success = await _meetingService.RemoveParticipantAsync(id, userId, GetUserId(), cancellationToken).ConfigureAwait(false);
-        return success ? NoContent() : BadRequest("Failed to remove participant. You may not be the organizer or the participant is not in the meeting.");
+        var (success, errorMessage) = await _meetingService.RemoveParticipantAsync(id, userId, GetUserId(), cancellationToken).ConfigureAwait(false);
+        return success ? NoContent() : BadRequest(errorMessage);
     }
 }

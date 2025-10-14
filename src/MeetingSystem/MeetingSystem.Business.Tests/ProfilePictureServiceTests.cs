@@ -40,7 +40,7 @@ public class ProfilePictureServiceTests
         _minioSettingsMock = new Mock<IOptions<MinioSettings>>();
         _minioSettingsMock.Setup(s => s.Value).Returns(new MinioSettings { PublicEndpoint = "http://localhost:9000", Buckets = new Buckets { Profile = "profile-pics", Meeting = "meeting-files" } });
 
-        _profilePictureService = new ProfilePictureService(_unitOfWork, _genericFileServiceMock.Object, _minioSettingsMock.Object);
+        _profilePictureService = new ProfilePictureService(_unitOfWork, _genericFileServiceMock.Object, _minioSettingsMock.Object, new Mock<ILogger<ProfilePictureService>>().Object);
     }
 
     [TearDown]
@@ -51,20 +51,21 @@ public class ProfilePictureServiceTests
     }
 
     /// <summary>
-    /// Verifies that SetAsync throws an exception if the user does not exist.
+    /// Verifies that SetAsync returns a failure status if the user does not exist.
     /// </summary>
     [Test]
-    public void SetAsync_WhenUserNotFound_ThrowsKeyNotFoundException()
+    public async Task SetAsync_WhenUserNotFound_ReturnsFailure()
     {
         // Arrange
         var nonExistentUserId = Guid.NewGuid();
         var fileMock = new Mock<IFormFile>();
 
         // Act
-        Func<Task> act = async () => await _profilePictureService.SetAsync(nonExistentUserId, fileMock.Object, CancellationToken.None);
+        var (status, errorMessage) = await _profilePictureService.SetAsync(nonExistentUserId, fileMock.Object, true, CancellationToken.None);
 
         // Assert
-        act.Should().ThrowAsync<KeyNotFoundException>();
+        status.Should().BeFalse();
+        errorMessage.Should().Be("User not found.");
     }
 
     /// <summary>
@@ -80,9 +81,10 @@ public class ProfilePictureServiceTests
         var fileMock = new Mock<IFormFile>();
 
         // Act
-        await _profilePictureService.SetAsync(user.Id, fileMock.Object, CancellationToken.None);
+        var (status, _) = await _profilePictureService.SetAsync(user.Id, fileMock.Object, true, CancellationToken.None);
 
         // Assert
+        status.Should().BeTrue();
         _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("profile-pics", "old-key", It.IsAny<CancellationToken>()), Times.Once);
         _genericFileServiceMock.Verify(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -99,10 +101,11 @@ public class ProfilePictureServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _profilePictureService.RemoveAsync(user.Id, CancellationToken.None);
+        var result = await _profilePictureService.RemoveAsync(user.Id, true, CancellationToken.None);
 
         // Assert
-        result.Should().BeFalse();
+        result.Status.Should().BeFalse();
+        result.ErrorMessage.Should().Be("User does not have a profile picture.");
         _genericFileServiceMock.Verify(s => s.RemoveObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
@@ -118,13 +121,12 @@ public class ProfilePictureServiceTests
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _profilePictureService.RemoveAsync(user.Id, CancellationToken.None);
+        var result = await _profilePictureService.RemoveAsync(user.Id, true, CancellationToken.None);
 
         // Assert
-        result.Should().BeTrue();
+        result.Status.Should().BeTrue();
         _genericFileServiceMock.Verify(s => s.RemoveObjectAsync("profile-pics", "existing-key", It.IsAny<CancellationToken>()), Times.Once);
 
-        // Verify the user's record was updated in the database
         var updatedUser = await _dbContext.Users.FindAsync(user.Id);
         updatedUser!.ProfilePictureUrl.Should().BeNull();
     }
@@ -169,4 +171,81 @@ public class ProfilePictureServiceTests
         resultUrl.Should().BeNull();
     }
 
+    // ***** NEW TEST CASE TO COVER MISSING BRANCH *****
+    /// <summary>
+    /// Verifies that RemoveAsync returns a failure status if the user does not exist.
+    /// </summary>
+    [Test]
+    public async Task RemoveAsync_WhenUserNotFound_ReturnsFailure()
+    {
+        // Arrange
+        var nonExistentUserId = Guid.NewGuid();
+
+        // Act
+        var (status, errorMessage) = await _profilePictureService.RemoveAsync(nonExistentUserId, true, CancellationToken.None);
+
+        // Assert
+        status.Should().BeFalse();
+        errorMessage.Should().Be("User not found.");
+    }
+
+    // ***** NEW TEST CASE TO COVER MISSING BRANCH *****
+    /// <summary>
+    /// Verifies that GetUrlAsync returns null when the user ID does not exist.
+    /// </summary>
+    [Test]
+    public async Task GetUrlAsync_WhenUserNotFound_ReturnsNull()
+    {
+        // Arrange
+        var nonExistentUserId = Guid.NewGuid();
+
+        // Act
+        var result = await _profilePictureService.GetUrlAsync(nonExistentUserId, CancellationToken.None);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    /// <summary>
+    /// Verifies that the catch block in SetAsync is triggered when the file service throws an exception.
+    /// </summary>
+    [Test]
+    public async Task SetAsync_WhenStorageFails_ThrowsAndRollsBack()
+    {
+        // Arrange
+        var user = new User { Id = Guid.NewGuid(), Email = "test@test.com", FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+        var fileMock = new Mock<IFormFile>();
+
+        _genericFileServiceMock.Setup(s => s.UploadObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IFormFile>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Simulated storage failure"));
+
+        // Act
+        Func<Task> act = async () => await _profilePictureService.SetAsync(user.Id, fileMock.Object, true, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
+    }
+
+    /// <summary>
+    /// Verifies that the catch block in RemoveAsync is triggered when the file service throws an exception.
+    /// </summary>
+    [Test]
+    public async Task RemoveAsync_WhenStorageFails_ThrowsAndRollsBack()
+    {
+        // Arrange
+        var user = new User { Id = Guid.NewGuid(), ProfilePictureUrl = "existing-key", Email = "test@test.com", FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+
+        _genericFileServiceMock.Setup(s => s.RemoveObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Simulated storage failure"));
+
+        // Act
+        Func<Task> act = async () => await _profilePictureService.RemoveAsync(user.Id, true, CancellationToken.None);
+
+        // Assert
+        await act.Should().ThrowAsync<Exception>().WithMessage("Simulated storage failure");
+    }
 }

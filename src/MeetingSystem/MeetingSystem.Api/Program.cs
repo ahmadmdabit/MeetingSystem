@@ -3,8 +3,10 @@ using HealthChecks.UI.Client;
 using MeetingSystem.Api;
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
+using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 // ..........................................................................................
@@ -71,7 +73,21 @@ try
     }
 
     // ..........................................................................................
-    // 6. Configure the HTTP Request Pipeline (Middleware)
+    // 6. Schedule the recurring job
+    // ..........................................................................................
+    var hangfireSettings = app.Services.GetRequiredService<IOptions<HangfireSettings>>().Value;
+    using (var scope = app.Services.CreateScope())
+    {
+        var recurringJobManager = scope.ServiceProvider.GetRequiredService<IRecurringJobManager>();
+        // This schedules the cleanup job to run.
+        recurringJobManager.AddOrUpdate<IMeetingCleanupService>(
+            "meeting-cleanup-job",
+            service => service.CleanUpAsync(true, CancellationToken.None),
+            hangfireSettings.CleanupJobCronExpression);
+    }    
+
+    // ..........................................................................................
+    // 7. Configure the HTTP Request Pipeline (Middleware)
     // ..........................................................................................
     // The order of middleware registration is critical for security and functionality.
     app.UseExceptionHandler("/error");
@@ -85,7 +101,7 @@ try
     // Secure the Hangfire dashboard, allowing access only to authenticated users with the "Admin" role.
     app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
-        AsyncAuthorization = [new HangfireJwtAuthorizationFilter("Admin")]
+        AsyncAuthorization = [new HangfireJwtAuthorizationFilter(hangfireSettings.DashboardAdminRole)]
     });
 
     app.UseHttpsRedirection();
@@ -102,7 +118,7 @@ try
     }); // Expose the health check endpoint.
 
     // ..........................................................................................
-    // 7. Run the Application
+    // 8. Run the Application
     // ..........................................................................................
     app.Run();
 }

@@ -37,6 +37,7 @@ public class GlobalSetup
             // ...... Testcontainers Path: Start a dedicated, isolated container for this test run ......
 
             // Define and start the reusable MSSQL container.
+#pragma warning disable CS0162 // Unreachable code detected
             _msSqlContainer = new ContainerBuilder()
                 .WithImage("mcr.microsoft.com/mssql/server:2017-latest")
                 .WithEnvironment("ACCEPT_EULA", "Y")
@@ -44,6 +45,7 @@ public class GlobalSetup
                 .WithPortBinding(dbPort, true) // Use a random available port
                 .WithWaitStrategy(Wait.ForUnixContainer().UntilCommandIsCompleted("/opt/mssql-tools/bin/sqlcmd", "-S", dbServer, "-U", dbUser, "-P", dbPassword, "-Q", "SELECT 1"))
                 .Build();
+#pragma warning restore CS0162 // Unreachable code detected
 
             await _msSqlContainer.StartAsync();
 
