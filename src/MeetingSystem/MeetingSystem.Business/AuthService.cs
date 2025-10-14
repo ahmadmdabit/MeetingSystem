@@ -62,6 +62,13 @@ public interface IAuthService
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A tuple indicating success and a corresponding error message on failure.</returns>
     Task<(bool Success, string? ErrorMessage)> UpdateCurrentUserProfileAsync(Guid userId, UpdateUserProfileDto dto, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a list of all users in the system. (Admin Only)
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A list of user profile DTOs.</returns>
+    Task<List<UserProfileDto>> GetAllUsersAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -234,6 +241,20 @@ public class AuthService : IAuthService
 
         _logger.LogInformation("User {UserId} successfully updated their profile.", userId);
         return (true, null);
+    }
+
+    /// <inheritdoc />
+    public async Task<List<UserProfileDto>> GetAllUsersAsync(CancellationToken cancellationToken = default)
+    {
+        var users = await _unitOfWork.Users
+            .GetAll()
+            .AsNoTracking()
+            .OrderBy(u => u.FirstName)
+            .Select(u => new UserProfileDto(u.Id, u.FirstName, u.LastName, u.Email, u.Phone))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return users;
     }
 
     /// <summary>

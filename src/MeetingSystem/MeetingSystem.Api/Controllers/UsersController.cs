@@ -21,17 +21,34 @@ public class UsersController : ControllerBase
 {
     private readonly IProfilePictureService _profilePictureService;
     private readonly IAdminService _adminService;
+    private readonly IAuthService _authService;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="UsersController"/> class.
     /// </summary>
-    public UsersController(IProfilePictureService profilePictureService, IAdminService adminService)
+    public UsersController(IProfilePictureService profilePictureService, IAdminService adminService, IAuthService authService)
     {
         _profilePictureService = profilePictureService;
         _adminService = adminService;
+        _authService = authService;
     }
 
     private Guid GetCurrentUserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    /// <summary>
+    /// Gets a list of all users in the system. (Admin Only)
+    /// </summary>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A list of all users.</returns>
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(List<UserProfileDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
+    {
+        var users = await _authService.GetAllUsersAsync(cancellationToken);
+        return Ok(users);
+    }
 
     /// <summary>
     /// Gets a secure, short-lived URL for a specific user's profile picture.

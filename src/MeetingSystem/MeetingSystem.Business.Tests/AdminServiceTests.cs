@@ -3,10 +3,13 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using NUnit.Framework;
+using Hangfire;
+using Hangfire.States;
+using Microsoft.EntityFrameworkCore;
+using Hangfire.Common;
 
 namespace MeetingSystem.Business.Tests;
 
@@ -16,6 +19,7 @@ public class AdminServiceTests
     private MeetingSystemDbContext _dbContext;
     private IUnitOfWork _unitOfWork;
     private IAdminService _adminService;
+    private Mock<IBackgroundJobClient> _backgroundJobClientMock;
     private Mock<ILogger<AdminService>> _loggerMock;
 
     [SetUp]
@@ -32,7 +36,8 @@ public class AdminServiceTests
 
         _unitOfWork = new UnitOfWork(_dbContext, Mock.Of<ILogger<UnitOfWork>>());
         _loggerMock = new Mock<ILogger<AdminService>>();
-        _adminService = new AdminService(_unitOfWork, _loggerMock.Object);
+        _backgroundJobClientMock = new Mock<IBackgroundJobClient>();
+        _adminService = new AdminService(_unitOfWork, _loggerMock.Object, _backgroundJobClientMock.Object);
     }
 
     [TearDown]
@@ -117,6 +122,23 @@ public class AdminServiceTests
         // Assert
         success.Should().BeFalse();
         errorMessage.Should().Be("Administrators cannot remove their own Admin role.");
+    }
+
+    [Test]
+    public async Task TriggerMeetingCleanupJobAsync_WhenCalled_EnqueuesJob()
+    {
+        // Arrange
+        var backgroundJobClientMock = new Mock<IBackgroundJobClient>();
+        var adminService = new AdminService(_unitOfWork, _loggerMock.Object, backgroundJobClientMock.Object);
+
+        // Act
+        await adminService.TriggerMeetingCleanupJobAsync();
+
+        // Assert
+        backgroundJobClientMock.Verify(x => x.Create(
+            It.Is<Job>(job => job.Type == typeof(IMeetingCleanupService) && job.Method.Name == nameof(IMeetingCleanupService.CleanUpAsync)),
+            It.IsAny<EnqueuedState>()),
+            Times.Once);
     }
 
     [Test]

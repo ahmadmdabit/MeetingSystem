@@ -5,6 +5,7 @@ using MeetingSystem.Context;
 using MeetingSystem.Model;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Hangfire;
 
 namespace MeetingSystem.Business;
 
@@ -31,6 +32,12 @@ public interface IAdminService
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A tuple indicating success and a corresponding error message on failure.</returns>
     Task<(bool Success, string? ErrorMessage)> RemoveRoleFromUserAsync(Guid userId, string roleName, Guid currentUserId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Enqueues a background job to clean up old meetings immediately.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task TriggerMeetingCleanupJobAsync();
 }
 
 /// <summary>
@@ -40,11 +47,13 @@ public class AdminService : IAdminService
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger<AdminService> _logger;
+    private readonly IBackgroundJobClient _backgroundJobClient;
 
-    public AdminService(IUnitOfWork unitOfWork, ILogger<AdminService> logger)
+    public AdminService(IUnitOfWork unitOfWork, ILogger<AdminService> logger, IBackgroundJobClient backgroundJobClient)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _backgroundJobClient = backgroundJobClient;
     }
 
     /// <inheritdoc />
@@ -113,5 +122,13 @@ public class AdminService : IAdminService
 
         _logger.LogInformation("Successfully removed role '{RoleName}' from user {UserId}.", roleName, userId);
         return (true, null);
+    }
+
+    /// <inheritdoc />
+    public Task TriggerMeetingCleanupJobAsync()
+    {
+        _backgroundJobClient.Enqueue<IMeetingCleanupService>(service => service.CleanUpAsync(true, CancellationToken.None));
+        _logger.LogInformation("Manually triggered meeting cleanup job.");
+        return Task.CompletedTask;
     }
 }

@@ -52,14 +52,14 @@ public class AuthServiceTests
             .Options;
 
         _dbContext = new MeetingSystemDbContext(options);
-        
+
         // 2. This cleanup is now MORE IMPORTANT THAN EVER.
         // It ensures each test is isolated from the others.
         await _dbContext.Database.EnsureDeletedAsync();
         await _dbContext.Database.MigrateAsync();
 
         _unitOfWork = new UnitOfWork(_dbContext, Mock.Of<ILogger<UnitOfWork>>());
-        
+
         _passwordHasherMock = new Mock<IPasswordHasher<User>>();
         _backgroundJobClientMock = new Mock<IBackgroundJobClient>();
         _emailServiceMock = new Mock<IEmailService>();
@@ -133,7 +133,7 @@ public class AuthServiceTests
         // Assert
         success.Should().BeTrue();
         message.Should().Be("User registered successfully.");
-        
+
         // Verify directly against the database
         var createdUser = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Email == dto.Email);
         createdUser.Should().NotBeNull();
@@ -179,7 +179,7 @@ public class AuthServiceTests
         // Verify that the transaction was rolled back and no user was created.
         (await _dbContext.Users.CountAsync()).Should().Be(0);
     }
-    
+
     /// <summary>
     /// Verifies that the main catch block in RegisterAsync is triggered and rolls back the transaction
     /// when a database constraint violation occurs.
@@ -200,10 +200,10 @@ public class AuthServiceTests
         // Assert
         success.Should().BeFalse();
         message.Should().Be("An unexpected error occurred during registration.");
-        
+
         // Verify no user was created due to the rollback
         (await _dbContext.Users.CountAsync()).Should().Be(0);
-        
+
         // Verify the error was logged
         _loggerMock.Verify(
             logger => logger.Log(
@@ -258,10 +258,10 @@ public class AuthServiceTests
 
         var user = new User { Id = Guid.NewGuid(), Email = "test@example.com", PasswordHash = "hash", FirstName = "Test", LastName = "User", Phone = "123" };
         var dto = new LoginDto(user.Email, "password");
-        
+
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
-        
+
         _passwordHasherMock.Setup(p => p.VerifyHashedPassword(user, user.PasswordHash, dto.Password))
             .Returns(PasswordVerificationResult.Success);
 
@@ -308,9 +308,9 @@ public class AuthServiceTests
         _profilePictureServiceMock.Verify(
             s => s.SetAsync(It.IsAny<Guid>(), profilePictureMock.Object, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
-    }    
-    
-    #endregion
+    }
+
+    #endregion RegisterAsync Tests
 
     #region LoginAsync Tests
 
@@ -357,10 +357,10 @@ public class AuthServiceTests
 
         // Assert
         success.Should().BeTrue();
-        
+
         var handler = new JwtSecurityTokenHandler();
         var token = handler.ReadJwtToken(tokenString);
-        
+
         token.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == userId.ToString());
         token.Claims.Should().Contain(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
     }
@@ -389,13 +389,13 @@ public class AuthServiceTests
         // Assert
         success.Should().BeTrue();
         token.Should().NotBeNullOrEmpty();
-        
+
         var handler = new JwtSecurityTokenHandler();
         var decodedToken = handler.ReadJwtToken(token);
         decodedToken.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == user.Id.ToString());
     }
 
-    #endregion
+    #endregion LoginAsync Tests
 
     #region LogoutAsync Tests
 
@@ -417,7 +417,7 @@ public class AuthServiceTests
         revokedToken!.Jti.Should().Be(jti);
     }
 
-    #endregion
+    #endregion LogoutAsync Tests
 
     #region Profile Tests
 
@@ -470,6 +470,24 @@ public class AuthServiceTests
     }
 
     [Test]
+    public async Task GetAllUsersAsync_WhenCalled_ReturnsAllUsersOrderedByFirstName()
+    {
+        // Arrange
+        await CreateUserAsync("zeta@test.com", "Zeta");
+        await CreateUserAsync("alpha@test.com", "Alpha");
+        await CreateUserAsync("gamma@test.com", "Gamma");
+
+        // Act
+        var result = await _authService.GetAllUsersAsync(CancellationToken.None);
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().HaveCount(3);
+        result.Select(u => u.FirstName).Should().BeInAscendingOrder();
+        result.First().FirstName.Should().Be("Alpha");
+    }
+
+    [Test]
     public async Task UpdateCurrentUserProfileAsync_WhenUserDoesNotExist_ReturnsFailure()
     {
         // Arrange
@@ -484,13 +502,19 @@ public class AuthServiceTests
         errorMessage.Should().Be("User not found.");
     }
 
-    #endregion
+    #endregion Profile Tests
 
     #region Helper Methods
 
     private async Task<User> CreateUserAsync(string email)
     {
-        var user = new User { Id = Guid.NewGuid(), Email = email, FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
+        return await CreateUserAsync(email, "Test");
+    }
+
+    private async Task<User> CreateUserAsync(string email, string firstName)
+
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = email, FirstName = firstName, LastName = "User", Phone = "123", PasswordHash = "hash" };
         _dbContext.Users.Add(user);
         await _dbContext.SaveChangesAsync();
         return user;
@@ -508,5 +532,5 @@ public class AuthServiceTests
         await _dbContext.SaveChangesAsync();
     }
 
-    #endregion
+    #endregion Helper Methods
 }
