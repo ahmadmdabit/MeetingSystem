@@ -419,7 +419,82 @@ public class AuthServiceTests
 
     #endregion
 
+    #region Profile Tests
+
+    [Test]
+    public async Task GetCurrentUserProfileAsync_WhenUserExists_ReturnsProfile()
+    {
+        // Arrange
+        var user = await CreateUserAsync("profile@test.com");
+
+        // Act
+        var profile = await _authService.GetCurrentUserProfileAsync(user.Id);
+
+        // Assert
+        profile.Should().NotBeNull();
+        profile!.Id.Should().Be(user.Id);
+        profile.Email.Should().Be(user.Email);
+    }
+
+    [Test]
+    public async Task GetCurrentUserProfileAsync_WhenUserDoesNotExist_ReturnsNull()
+    {
+        // Arrange
+        var nonExistentUserId = Guid.NewGuid();
+
+        // Act
+        var profile = await _authService.GetCurrentUserProfileAsync(nonExistentUserId);
+
+        // Assert
+        profile.Should().BeNull();
+    }
+
+    [Test]
+    public async Task UpdateCurrentUserProfileAsync_WhenUserExists_UpdatesProfile()
+    {
+        // Arrange
+        var user = await CreateUserAsync("update@test.com");
+        var dto = new UpdateUserProfileDto("UpdatedFirst", "UpdatedLast", "555-1234");
+
+        // Act
+        var (success, errorMessage) = await _authService.UpdateCurrentUserProfileAsync(user.Id, dto);
+
+        // Assert
+        success.Should().BeTrue();
+        errorMessage.Should().BeNull();
+
+        var updatedUser = await _dbContext.Users.FindAsync(user.Id);
+        updatedUser!.FirstName.Should().Be("UpdatedFirst");
+        updatedUser.LastName.Should().Be("UpdatedLast");
+        updatedUser.Phone.Should().Be("555-1234");
+    }
+
+    [Test]
+    public async Task UpdateCurrentUserProfileAsync_WhenUserDoesNotExist_ReturnsFailure()
+    {
+        // Arrange
+        var nonExistentUserId = Guid.NewGuid();
+        var dto = new UpdateUserProfileDto("First", "Last", "123");
+
+        // Act
+        var (success, errorMessage) = await _authService.UpdateCurrentUserProfileAsync(nonExistentUserId, dto);
+
+        // Assert
+        success.Should().BeFalse();
+        errorMessage.Should().Be("User not found.");
+    }
+
+    #endregion
+
     #region Helper Methods
+
+    private async Task<User> CreateUserAsync(string email)
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = email, FirstName = "Test", LastName = "User", Phone = "123", PasswordHash = "hash" };
+        _dbContext.Users.Add(user);
+        await _dbContext.SaveChangesAsync();
+        return user;
+    }
 
     /// <summary>
     /// Helper to seed the "Admin" and "User" roles into the test database.

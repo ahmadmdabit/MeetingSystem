@@ -45,6 +45,23 @@ public interface IAuthService
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task LogoutAsync(string jti, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the profile information for the currently authenticated user.
+    /// </summary>
+    /// <param name="userId">The ID of the user from the JWT claims.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A DTO with the user's profile information, or null if not found.</returns>
+    Task<UserProfileDto?> GetCurrentUserProfileAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates the profile information for the currently authenticated user.
+    /// </summary>
+    /// <param name="userId">The ID of the user from the JWT claims.</param>
+    /// <param name="dto">The DTO containing the updated profile data.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>A tuple indicating success and a corresponding error message on failure.</returns>
+    Task<(bool Success, string? ErrorMessage)> UpdateCurrentUserProfileAsync(Guid userId, UpdateUserProfileDto dto, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -180,6 +197,43 @@ public class AuthService : IAuthService
         var revokedToken = new RevokedToken { Jti = jti };
         _unitOfWork.RevokedTokens.Add(revokedToken);
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<UserProfileDto?> GetCurrentUserProfileAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _unitOfWork.Users
+            .Find(u => u.Id == userId)
+            .AsNoTracking()
+            .Select(u => new UserProfileDto(u.Id, u.FirstName, u.LastName, u.Email, u.Phone))
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return user;
+    }
+
+    /// <inheritdoc />
+    public async Task<(bool Success, string? ErrorMessage)> UpdateCurrentUserProfileAsync(Guid userId, UpdateUserProfileDto dto, CancellationToken cancellationToken = default)
+    {
+        var user = await _unitOfWork.Users
+            .Find(u => u.Id == userId)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (user == null)
+        {
+            _logger.LogWarning("Profile update failed: User {UserId} not found.", userId);
+            return (false, "User not found.");
+        }
+
+        user.FirstName = dto.FirstName;
+        user.LastName = dto.LastName;
+        user.Phone = dto.Phone;
+
+        await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("User {UserId} successfully updated their profile.", userId);
+        return (true, null);
     }
 
     /// <summary>
