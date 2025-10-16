@@ -109,6 +109,24 @@ docker-compose up -d
 
 This will start all the services in detached mode. The API will be available at `http://localhost:8080`.
 
+Once the services are running, you can access the following endpoints:
+
+- **Swagger UI:** `http://localhost:8080/swagger`
+  - Interactive API documentation and testing.
+- **Health Checks:** `http://localhost:8080/health`
+  - Endpoint to check the health status of the application and its dependencies.
+- **Hangfire Dashboard:** `http://localhost:8080/hangfire`
+  - Dashboard for monitoring background jobs.
+  - > **Tip:** To access the Hangfire dashboard, which requires authentication, follow these steps:
+    > 1. Log in through the Swagger UI (`/api/Auth/login`) to get a JWT token.
+    > 2. Use a browser extension like [ModHeader - Modify HTTP headers](https://chrome.google.com/webstore/detail/modheader-modify-http-hea/idgpnmonknjnojddfkpgkljpfnnfcklj) to add an `Authorization` request header.
+    > 3. Set the header's value to `Bearer <YOUR_TOKEN>`, replacing `<YOUR_TOKEN>` with the actual token.
+    > 4. With the header active, you can now access the Hangfire dashboard.
+- **Mailpit (Local SMTP Server):** `http://localhost:8025/`
+  - Web UI for viewing emails sent by the application during local development.
+- **MinIO (Object Storage):** `http://localhost:9001/`
+  - Web-based interface for managing files in the local object storage.
+
 ## 8. Running the Tests
 
 The project includes a comprehensive suite of unit and integration tests. To run the tests, execute the following command from the `src/MeetingSystem` directory:
