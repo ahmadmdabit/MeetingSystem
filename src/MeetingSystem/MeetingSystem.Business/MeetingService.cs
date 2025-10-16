@@ -30,7 +30,6 @@ public interface IMeetingService
     /// </summary>
     /// <param name="meetingId">The ID of the meeting to retrieve.</param>
     /// <param name="userId">The ID of the user requesting the details.</param>
-    /// <param name="commit">A flag indicating whether to commit the transaction.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A DTO with the meeting's details, or null if not found or user is not a participant.</returns>
     Task<MeetingDto?> GetMeetingByIdAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default);

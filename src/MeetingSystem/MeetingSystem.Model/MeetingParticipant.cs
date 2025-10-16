@@ -22,7 +22,7 @@ public class MeetingParticipant
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Optional role of the participant, e.g., "Presenter", "Scribe".
+    /// Optional role of the participant, e.g., "Organizer", "Participant".
     /// </summary>
     public string? Role { get; set; }
 

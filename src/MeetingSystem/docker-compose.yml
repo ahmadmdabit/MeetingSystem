@@ -35,6 +35,28 @@ services:
       # Connection strings use the *service name* (e.g., 'mssql') as the host,
       # which is resolved by Docker's internal DNS.
       - ConnectionStrings__DefaultConnection=Server=${DK_SQL_SERVER};Database=${DK_SQL_DATABASE};User Id=${DK_SQL_USER_ID};Password=${DK_SQL_PASSWORD};TrustServerCertificate=True;
+      - Seeding__Enabled=${DK_SEEDING_ENABLED}
+      - Seeding__AdminUser__Id=${DK_SEEDING_ADMIN_ID}
+      - Seeding__AdminUser__FirstName=${DK_SEEDING_ADMIN_FIRSTNAME}
+      - Seeding__AdminUser__LastName=${DK_SEEDING_ADMIN_LASTNAME}
+      - Seeding__AdminUser__Email=${DK_SEEDING_ADMIN_EMAIL}
+      - Seeding__AdminUser__Password=${DK_SEEDING_ADMIN_PASSWORD}
+      - Seeding__DefaultUsersCount=${DK_SEEDING_DEFAULT_USERS_COUNT}
+      - Seeding__DefaultUsers__0__Id=${DK_SEEDING_DEFAULT_USERS_0_ID}
+      - Seeding__DefaultUsers__0__FirstName=${DK_SEEDING_DEFAULT_USERS_0_FIRSTNAME}
+      - Seeding__DefaultUsers__0__LastName=${DK_SEEDING_DEFAULT_USERS_0_LASTNAME}
+      - Seeding__DefaultUsers__0__Email=${DK_SEEDING_DEFAULT_USERS_0_EMAIL}
+      - Seeding__DefaultUsers__0__Password=${DK_SEEDING_DEFAULT_USERS_0_PASSWORD}
+      - Seeding__DefaultUsers__1__Id=${DK_SEEDING_DEFAULT_USERS_1_ID}
+      - Seeding__DefaultUsers__1__FirstName=${DK_SEEDING_DEFAULT_USERS_1_FIRSTNAME}
+      - Seeding__DefaultUsers__1__LastName=${DK_SEEDING_DEFAULT_USERS_1_LASTNAME}
+      - Seeding__DefaultUsers__1__Email=${DK_SEEDING_DEFAULT_USERS_1_EMAIL}
+      - Seeding__DefaultUsers__1__Password=${DK_SEEDING_DEFAULT_USERS_1_PASSWORD}
+      - Seeding__BogusData__Generate=${DK_SEEDING_BOGUS_GENERATE}
+      - Seeding__BogusData__UserCount=${DK_SEEDING_BOGUS_USER_COUNT}
+      - Seeding__BogusData__MeetingCount=${DK_SEEDING_BOGUS_MEETING_COUNT}
+      - Seeding__BogusData__DefaultPassword=${DK_SEEDING_BOGUS_DEFAULT_PASSWORD}
+      - Cors__AllowedOrigins__0=${DK_CORS_ALLOWEDORIGINS_0}
       - Jwt__Key=${DK_JWT_KEY}
       - Jwt__Issuer=${DK_JWT_ISSUER}
       - Jwt__Audience=${DK_JWT_AUDIENCE}

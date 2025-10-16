@@ -3,6 +3,7 @@ using Hangfire;
 using HealthChecks.UI.Client;
 
 using MeetingSystem.Api;
+using MeetingSystem.Api.Converters;
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Configuration;
@@ -51,7 +52,11 @@ try
     builder.Services.AddCorsServices(builder.Configuration);
     builder.Services.AddAuthServices(builder.Configuration);
     builder.Services.AddValidationServices(builder.Configuration);
-    builder.Services.AddControllers();
+    builder.Services.AddControllers().AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeConverter());
+        options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeConverter());
+    });
     builder.Services.AddSwaggerServices(builder.Configuration);
 
     // ..........................................................................................
@@ -68,6 +73,7 @@ try
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
         app.Services.ApplyMigrations(logger);
+        app.Services.ApplySeedData(logger);
     }
     catch (Exception ex)
     {

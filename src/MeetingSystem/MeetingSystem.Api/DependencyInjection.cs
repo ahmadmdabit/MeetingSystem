@@ -38,6 +38,10 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddOptions<SeedingSettings>()
+            .BindConfiguration(SeedingSettings.SectionName)
+            .ValidateDataAnnotations();
+
         services.AddOptions<SmtpSettings>()
             .BindConfiguration(SmtpSettings.SectionName)
             .ValidateDataAnnotations();
@@ -270,6 +274,22 @@ public static class DependencyInjection
                 }
             });
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Apply seedding data.
+    /// </summary>
+    /// <param name="services">The IServiceProvider to resolve services from.</param>
+    /// <param name="logger">The logger for recording migration events.</param>
+    /// <returns>The same <see cref="IServiceProvider"/> so that multiple calls can be chained.</returns>
+    public static IServiceProvider ApplySeedData(
+        this IServiceProvider services, ILogger logger)
+    {
+        // Resolve DbContext from a new scope to ensure proper disposal.
+        using var scope = services.CreateScope();
+        DataSeeder.SeedDataAsync(scope.ServiceProvider, logger).GetAwaiter().GetResult();
 
         return services;
     }
