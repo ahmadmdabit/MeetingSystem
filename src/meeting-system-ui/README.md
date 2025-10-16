@@ -19,7 +19,8 @@ This project is the frontend for the Meeting System application, built with Angu
 4.  [API Documentation](#api-documentation)
 5.  [Available Scripts](#available-scripts)
 6.  [Architectural Patterns](#architectural-patterns)
-7.  [Code Scaffolding](#code-scaffolding)
+7.  [Use Cases](#use-cases)
+8.  [Code Scaffolding](#code-scaffolding)
 
 ## Tech Stack
 
@@ -134,6 +135,12 @@ The following scripts are available in `package.json` and can be run with `yarn 
 *   **Reactive View Models**: Components manage state using a reactive pattern. An observable `vm$` stream holds the component's state, which is consumed in the template using the `async` pipe. This improves performance and makes state management more predictable and declarative.
 *   **Global Error Handling**: An `HttpInterceptor` (`error.interceptor.ts`) is implemented to globally catch and handle API errors, providing consistent user feedback and centralized logic for handling authentication errors (e.g., 401 Unauthorized).
 *   **Authentication Flow**: Route access is protected using functional guards (`auth.guard.ts`). The `AuthService` handles JWT decoding and role-based access checks.
+
+## Use Cases
+
+For a detailed guide on the primary user flows and functionalities of the application, refer to the use case documentation.
+
+*   **[Application Use Cases Guide](docs/UseCases.md)**
 
 ## Code Scaffolding
 
