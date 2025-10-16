@@ -7,6 +7,7 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 
 using Hangfire;
+
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 
@@ -64,7 +65,7 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")!;
 
-        var hangfireSettings = configuration.GetSection(HangfireSettings.SectionName).Get<HangfireSettings>() 
+        var hangfireSettings = configuration.GetSection(HangfireSettings.SectionName).Get<HangfireSettings>()
                                ?? HangfireSettings.Default;
 
         services.AddHangfire(config => config

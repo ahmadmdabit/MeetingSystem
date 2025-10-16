@@ -1,17 +1,17 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Threading;
-using System.Threading.Tasks;
+
 using FluentAssertions;
+
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
 using MockQueryable.Moq;
+
 using Moq;
 
 namespace MeetingSystem.Business.Tests;
@@ -35,17 +35,17 @@ public class MeetingCleanupServiceTests
         _minioSettingsOptionsMock = new Mock<IOptions<MinioSettings>>();
         _loggerMock = new Mock<ILogger<MeetingCleanupService>>();
 
-        _hangfireSettingsOptionsMock.Setup(s => s.Value).Returns(new HangfireSettings 
+        _hangfireSettingsOptionsMock.Setup(s => s.Value).Returns(new HangfireSettings
         {
             CleanupThresholdDays = 30,
             DashboardAdminRole = "Admin",
             CleanupJobCronExpression = "* * * * *"
         });
-        _minioSettingsOptionsMock.Setup(s => s.Value).Returns(new MinioSettings 
+        _minioSettingsOptionsMock.Setup(s => s.Value).Returns(new MinioSettings
         {
-            Buckets = new Buckets 
+            Buckets = new Buckets
             {
-                Meeting = "meeting-files", 
+                Meeting = "meeting-files",
                 Profile = "profile-pics"
             },
             PublicEndpoint = "http://localhost:9000"
@@ -166,7 +166,7 @@ public class MeetingCleanupServiceTests
         var meetingsToClean = new List<Meeting>
         {
             new Meeting { Id = meetingId, OrganizerId = organizerId, Name = "Meeting with failing file", Description = "Desc",
-                Files = new List<MeetingFile> 
+                Files = new List<MeetingFile>
                 {
                     new MeetingFile {
                         Id = Guid.NewGuid(),

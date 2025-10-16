@@ -1,20 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
+
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
 using Moq;
-using NUnit.Framework;
 
 namespace MeetingSystem.Business.Tests
 {

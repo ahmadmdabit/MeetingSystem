@@ -2,6 +2,7 @@ using MeetingSystem.Business.Configuration;
 using MeetingSystem.Business.Dtos;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -102,7 +103,7 @@ public class MeetingFileService : IMeetingFileService
             .Find(p => p.MeetingId == meetingId && p.UserId == userId)
             .AnyAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (!isParticipant)
         {
             _logger.LogWarning("Upload failed: User {UserId} is not a participant of meeting {MeetingId}.", userId, meetingId);
@@ -188,7 +189,7 @@ public class MeetingFileService : IMeetingFileService
             }
 
             await _genericFileService.RemoveObjectAsync(_bucketName, file.MinioObjectKey, cancellationToken).ConfigureAwait(false);
-            
+
             _unitOfWork.MeetingFiles.Remove(file);
 
             if (commit)

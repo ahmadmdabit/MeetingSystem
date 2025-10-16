@@ -1,11 +1,9 @@
-using System;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
+
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
+
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MeetingSystem.Api.Controllers;
@@ -46,7 +44,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
     {
-        var users = await _authService.GetAllUsersAsync(cancellationToken);
+        var users = await _authService.GetAllUsersAsync(cancellationToken).ConfigureAwait(false);
         return Ok(users);
     }
 
@@ -79,7 +77,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> AssignRole(Guid userId, [FromBody] AssignRoleDto dto, CancellationToken cancellationToken)
     {
-        var (success, errorMessage) = await _adminService.AssignRoleToUserAsync(userId, dto.RoleName, cancellationToken);
+        var (success, errorMessage) = await _adminService.AssignRoleToUserAsync(userId, dto.RoleName, cancellationToken).ConfigureAwait(false);
         if (!success)
         {
             return BadRequest(new { Message = errorMessage });
@@ -100,7 +98,7 @@ public class UsersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> RemoveRole(Guid userId, string roleName, CancellationToken cancellationToken)
     {
-        var (success, errorMessage) = await _adminService.RemoveRoleFromUserAsync(userId, roleName, GetCurrentUserId(), cancellationToken);
+        var (success, errorMessage) = await _adminService.RemoveRoleFromUserAsync(userId, roleName, GetCurrentUserId(), cancellationToken).ConfigureAwait(false);
         if (!success)
         {
             return BadRequest(new { Message = errorMessage });

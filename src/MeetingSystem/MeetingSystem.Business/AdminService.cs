@@ -1,11 +1,10 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using Hangfire;
+
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Hangfire;
 
 namespace MeetingSystem.Business;
 
@@ -59,14 +58,14 @@ public class AdminService : IAdminService
     /// <inheritdoc />
     public async Task<(bool Success, string? ErrorMessage)> AssignRoleToUserAsync(Guid userId, string roleName, CancellationToken cancellationToken = default)
     {
-        var user = await _unitOfWork.Users.Find(u => u.Id == userId).FirstOrDefaultAsync(cancellationToken);
+        var user = await _unitOfWork.Users.Find(u => u.Id == userId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (user == null)
         {
             _logger.LogWarning("User {UserId} not found.", userId);
             return (false, "User not found.");
         }
 
-        var role = await _unitOfWork.Roles.Find(r => r.Name == roleName).FirstOrDefaultAsync(cancellationToken);
+        var role = await _unitOfWork.Roles.Find(r => r.Name == roleName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (role == null)
         {
             _logger.LogWarning("Role '{RoleName}' not found.", roleName);
@@ -75,7 +74,8 @@ public class AdminService : IAdminService
 
         var userRoleExists = await _unitOfWork.UserRoles
             .Find(ur => ur.UserId == userId && ur.RoleId == role.Id)
-            .AnyAsync(cancellationToken);
+            .AnyAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         if (userRoleExists)
         {
@@ -84,7 +84,7 @@ public class AdminService : IAdminService
         }
 
         _unitOfWork.UserRoles.Add(new UserRole { UserId = userId, RoleId = role.Id });
-        await _unitOfWork.CompleteAsync(cancellationToken);
+        await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Successfully assigned role '{RoleName}' to user {UserId}.", roleName, userId);
         return (true, null);
@@ -100,7 +100,7 @@ public class AdminService : IAdminService
             return (false, "Administrators cannot remove their own Admin role.");
         }
 
-        var role = await _unitOfWork.Roles.Find(r => r.Name == roleName).FirstOrDefaultAsync(cancellationToken);
+        var role = await _unitOfWork.Roles.Find(r => r.Name == roleName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (role == null)
         {
             _logger.LogWarning("Role '{RoleName}' not found.", roleName);
@@ -109,7 +109,8 @@ public class AdminService : IAdminService
 
         var userRole = await _unitOfWork.UserRoles
             .Find(ur => ur.UserId == userId && ur.RoleId == role.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
 
         if (userRole == null)
         {
@@ -118,7 +119,7 @@ public class AdminService : IAdminService
         }
 
         _unitOfWork.UserRoles.Remove(userRole);
-        await _unitOfWork.CompleteAsync(cancellationToken);
+        await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Successfully removed role '{RoleName}' from user {UserId}.", roleName, userId);
         return (true, null);

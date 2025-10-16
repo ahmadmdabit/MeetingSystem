@@ -1,10 +1,12 @@
 using MeetingSystem.Model;
+
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
 using Polly;
 
 namespace MeetingSystem.Context;
@@ -27,12 +29,12 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
         services.AddDataProtection().PersistKeysToDbContext<MeetingSystemDbContext>();
-        
-        services.AddDbContext<MeetingSystemDbContext>(options => 
+
+        services.AddDbContext<MeetingSystemDbContext>(options =>
             options.UseSqlServer(connectionString));
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
-        
+
         return services;
     }
 
@@ -71,7 +73,7 @@ public static class DependencyInjection
             logger.LogInformation("Database migrations applied successfully.");
         });
     }
-    
+
     private static async Task SeedRolesAsync(MeetingSystemDbContext context, ILogger logger)
     {
         string[] roleNames = ["Admin", "User"];

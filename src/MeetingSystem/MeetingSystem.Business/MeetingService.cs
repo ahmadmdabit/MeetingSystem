@@ -1,8 +1,10 @@
 using Hangfire;
+
 using MeetingSystem.Business.Dtos;
 using MeetingSystem.Business.Jobs;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -170,7 +172,7 @@ public class MeetingService : IMeetingService
 
             foreach (var userId in usersToInvite)
             {
-                _unitOfWork.MeetingParticipants.Add(new MeetingParticipant 
+                _unitOfWork.MeetingParticipants.Add(new MeetingParticipant
                 {
                     MeetingId = newMeetingId,
                     UserId = userId,
@@ -191,7 +193,7 @@ public class MeetingService : IMeetingService
             if (reminderTime > DateTime.UtcNow)
             {
                 _backgroundJobClient.Schedule<IMeetingJobs>(
-                    job => job.SendReminderAsync(newMeetingId, CancellationToken.None), 
+                    job => job.SendReminderAsync(newMeetingId, CancellationToken.None),
                     reminderTime);
             }
         }
@@ -253,8 +255,8 @@ public class MeetingService : IMeetingService
                 m.OrganizerId,
                 m.IsCanceled,
                 m.Participants
-                    .OrderByDescending(p => p.UserId == m.OrganizerId) 
-                    .ThenBy(p => p.AddedAt) 
+                    .OrderByDescending(p => p.UserId == m.OrganizerId)
+                    .ThenBy(p => p.AddedAt)
                     .Select(p => new ParticipantDto(
                         p.UserId,
                         p.User!.FirstName,
@@ -362,7 +364,7 @@ public class MeetingService : IMeetingService
             _logger.LogWarning("Cancel failed: Meeting {MeetingId} not found.", meetingId);
             return (false, "Meeting not found.");
         }
-        
+
         if (meeting.OrganizerId != userId)
         {
             _logger.LogWarning("Cancel failed: User {UserId} is not the organizer of meeting {MeetingId}.", userId, meetingId);
@@ -383,7 +385,7 @@ public class MeetingService : IMeetingService
             .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (meeting == null)
         {
             _logger.LogWarning("Add participant failed: Meeting {MeetingId} not found.", meetingId);
@@ -400,7 +402,7 @@ public class MeetingService : IMeetingService
             .Find(u => u.Email == participantEmail)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (userToAdd == null)
         {
             _logger.LogWarning("Add participant failed: Participant user {participantEmail} not found.", participantEmail);
@@ -411,16 +413,16 @@ public class MeetingService : IMeetingService
             .Find(p => p.MeetingId == meetingId && p.UserId == userToAdd.Id)
             .AnyAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (alreadyExists)
         {
             return (true, null); // Operation is idempotent, success.
         }
 
-        var participant = new MeetingParticipant { MeetingId = meetingId, UserId = userToAdd.Id , Role = "Participant" };
+        var participant = new MeetingParticipant { MeetingId = meetingId, UserId = userToAdd.Id, Role = "Participant" };
         _unitOfWork.MeetingParticipants.Add(participant);
         await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
-        
+
         return (true, null); // Success
     }
 
@@ -431,7 +433,7 @@ public class MeetingService : IMeetingService
             .Find(m => m.Id == meetingId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (meeting == null)
         {
             _logger.LogWarning("Remove participant failed: Meeting {MeetingId} not found.", meetingId);
@@ -454,7 +456,7 @@ public class MeetingService : IMeetingService
             .Find(p => p.MeetingId == meetingId && p.UserId == participantId)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
-            
+
         if (participant == null)
         {
             _logger.LogWarning("Remove participant failed: Participant user {participantEmail} not found in this meeting {MeetingId}.", participantId, meetingId);

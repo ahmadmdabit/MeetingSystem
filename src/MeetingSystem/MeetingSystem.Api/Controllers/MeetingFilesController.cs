@@ -1,7 +1,9 @@
 using System.Security.Claims;
+
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -45,7 +47,7 @@ public class MeetingFilesController : ControllerBase
     public async Task<IActionResult> Upload(Guid meetingId, IFormFileCollection files, CancellationToken cancellationToken)
     {
         var (fileDtos, errorMessage) = await _meetingFileService.UploadAsync(meetingId, files, GetUserId(), true, cancellationToken).ConfigureAwait(false);
-        
+
         if (!string.IsNullOrWhiteSpace(errorMessage))
         {
             if (errorMessage.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)
@@ -69,7 +71,7 @@ public class MeetingFilesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetFiles(Guid meetingId, CancellationToken cancellationToken)
     {
-        var (files, errorMessage) = await _meetingFileService.GetMeetingFilesAsync(meetingId, GetUserId(), cancellationToken);
+        var (files, errorMessage) = await _meetingFileService.GetMeetingFilesAsync(meetingId, GetUserId(), cancellationToken).ConfigureAwait(false);
         if (errorMessage != null)
         {
             return Forbid(errorMessage);
@@ -90,7 +92,7 @@ public class MeetingFilesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDownloadUrl(Guid meetingId, Guid fileId, CancellationToken cancellationToken)
     {
-        var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meetingId, fileId, GetUserId(), cancellationToken);
+        var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meetingId, fileId, GetUserId(), cancellationToken).ConfigureAwait(false);
 
         if (url == null)
         {
@@ -121,7 +123,7 @@ public class MeetingFilesController : ControllerBase
     public async Task<IActionResult> Remove(Guid meetingId, Guid fileId, CancellationToken cancellationToken)
     {
         var (success, errorMessage) = await _meetingFileService.RemoveAsync(meetingId, fileId, GetUserId(), true, cancellationToken).ConfigureAwait(false);
-        
+
         if (!success)
         {
             if (errorMessage?.Contains("not found", StringComparison.OrdinalIgnoreCase) == true)

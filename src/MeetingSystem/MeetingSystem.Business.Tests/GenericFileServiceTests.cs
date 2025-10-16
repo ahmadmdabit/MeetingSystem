@@ -1,21 +1,17 @@
-using System;
-using System.IO;
-using System.IO.Compression;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
-using MeetingSystem.Business;
+
 using MeetingSystem.Business.Configuration;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
 using Minio;
-using Minio.DataModel;
 using Minio.DataModel.Args;
 using Minio.DataModel.Response;
 using Minio.Exceptions;
+
 using Moq;
-using NUnit.Framework;
 
 namespace MeetingSystem.Business.Tests;
 

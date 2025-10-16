@@ -1,23 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using FluentAssertions;
-using MeetingSystem.Business;
+
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+
 using Moq;
-using NUnit.Framework;
 
 namespace MeetingSystem.Business.Tests;
 
 [TestFixture]
-public class ProfilePictureServiceTests 
+public class ProfilePictureServiceTests
 {
     private IUnitOfWork _unitOfWork;
     private MeetingSystemDbContext _dbContext;

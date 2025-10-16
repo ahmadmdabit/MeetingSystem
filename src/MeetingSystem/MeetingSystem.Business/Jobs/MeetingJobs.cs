@@ -1,4 +1,5 @@
 using MeetingSystem.Context;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -42,7 +43,7 @@ public class MeetingJobs : IMeetingJobs
         // Use IQueryable to build an efficient query
         var meetingDetails = await _unitOfWork.Meetings
             .Find(m => m.Id == meetingId)
-            .Select(m => new 
+            .Select(m => new
             {
                 m.Name,
                 m.StartAt,
@@ -62,13 +63,13 @@ public class MeetingJobs : IMeetingJobs
         foreach (var participantEmail in meetingDetails.Participants)
         {
             await _emailService.SendMeetingReminderAsync(
-                participantEmail, 
-                meetingDetails.Name, 
-                meetingDetails.StartAt, 
+                participantEmail,
+                meetingDetails.Name,
+                meetingDetails.StartAt,
                 cancellationToken)
             .ConfigureAwait(false);
         }
-        
+
         _logger.LogInformation("Successfully sent reminders for meeting {MeetingId}", meetingId);
     }
 }

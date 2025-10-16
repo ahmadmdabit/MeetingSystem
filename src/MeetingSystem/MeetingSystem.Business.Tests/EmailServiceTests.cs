@@ -1,7 +1,5 @@
 ﻿using FluentAssertions;
 
-using MailKit.Net.Smtp;
-
 using MeetingSystem.Business.Configuration;
 
 using Microsoft.Extensions.Options;

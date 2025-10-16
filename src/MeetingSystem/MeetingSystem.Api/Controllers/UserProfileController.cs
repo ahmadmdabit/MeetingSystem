@@ -1,12 +1,10 @@
-using System;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
+
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
+
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MeetingSystem.Api.Controllers;
@@ -41,7 +39,7 @@ public class UserProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetCurrentUserProfile(CancellationToken cancellationToken)
     {
-        var userProfile = await _authService.GetCurrentUserProfileAsync(GetUserId(), cancellationToken);
+        var userProfile = await _authService.GetCurrentUserProfileAsync(GetUserId(), cancellationToken).ConfigureAwait(false);
         if (userProfile == null)
         {
             return NotFound();
@@ -57,7 +55,7 @@ public class UserProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UpdateCurrentUserProfile([FromBody] UpdateUserProfileDto dto, CancellationToken cancellationToken)
     {
-        var (success, errorMessage) = await _authService.UpdateCurrentUserProfileAsync(GetUserId(), dto, cancellationToken);
+        var (success, errorMessage) = await _authService.UpdateCurrentUserProfileAsync(GetUserId(), dto, cancellationToken).ConfigureAwait(false);
         if (!success)
         {
             return BadRequest(new { Message = errorMessage });

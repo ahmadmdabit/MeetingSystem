@@ -1,6 +1,9 @@
 ﻿using MailKit.Net.Smtp;
+
 using MeetingSystem.Business.Configuration;
+
 using Microsoft.Extensions.Options;
+
 using MimeKit;
 
 namespace MeetingSystem.Business;
@@ -80,7 +83,7 @@ public class EmailService : IEmailService
     {
         var bodyBuilder = new BodyBuilder { HtmlBody = htmlBody };
         bodyBuilder.Attachments.Add(attachmentFileName, attachmentStream, cancellationToken);
-        
+
         return SendEmailAsync(to, subject, bodyBuilder.ToMessageBody(), cancellationToken);
     }
 
@@ -105,7 +108,7 @@ public class EmailService : IEmailService
         message.Body = body;
 
         using var client = new SmtpClient();
-        
+
         await client.ConnectAsync(_smtpSettings.Host, _smtpSettings.Port, _smtpSettings.UseSsl, cancellationToken).ConfigureAwait(false);
 
         if (!string.IsNullOrWhiteSpace(_smtpSettings.Username))

@@ -1,7 +1,6 @@
-using Hangfire.Dashboard;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using System.Security.Claims;
+
+using Hangfire.Dashboard;
 
 namespace MeetingSystem.Api.Filters;
 

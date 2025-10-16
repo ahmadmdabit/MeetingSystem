@@ -1,7 +1,6 @@
-using System.Threading.Tasks;
 using MeetingSystem.Business;
+
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MeetingSystem.Api.Controllers;
@@ -33,7 +32,7 @@ public class AdminController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> TriggerCleanupJob()
     {
-        await _adminService.TriggerMeetingCleanupJobAsync();
+        await _adminService.TriggerMeetingCleanupJobAsync().ConfigureAwait(false);
         return Accepted(new { Message = "Meeting cleanup job has been successfully triggered." });
     }
 }

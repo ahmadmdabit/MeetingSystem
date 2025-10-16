@@ -72,7 +72,7 @@ public class ProfilePictureService : IProfilePictureService
     /// <inheritdoc />
     public async Task<(bool Status, string? ErrorMessage)> SetAsync(Guid userId, IFormFile file, bool commit = true, CancellationToken cancellationToken = default)
     {
-        if(commit)
+        if (commit)
         {
             await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         }

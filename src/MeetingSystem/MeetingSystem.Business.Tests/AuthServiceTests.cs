@@ -1,24 +1,22 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using DotNet.Testcontainers.Builders;
-using DotNet.Testcontainers.Containers;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+
 using FluentAssertions;
+
 using Hangfire;
-using MeetingSystem.Business;
-using MeetingSystem.Context;
+using Hangfire.Common;
+
 using MeetingSystem.Business.Dtos;
+using MeetingSystem.Context;
 using MeetingSystem.Model;
+
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+
 using Moq;
-using NUnit.Framework;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using Hangfire.Common;
-using Microsoft.AspNetCore.Http;
 
 namespace MeetingSystem.Business.Tests;
 
@@ -528,7 +526,7 @@ public class AuthServiceTests
             logger => logger.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Profile picture URL generation failed")), 
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Profile picture URL generation failed")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);

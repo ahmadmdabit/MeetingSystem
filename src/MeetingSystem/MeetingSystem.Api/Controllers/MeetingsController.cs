@@ -1,12 +1,9 @@
-using System;
-using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
+
 using MeetingSystem.Business;
 using MeetingSystem.Business.Dtos;
+
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MeetingSystem.Api.Controllers;

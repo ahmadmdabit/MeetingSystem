@@ -1,5 +1,3 @@
-using System.Linq.Expressions;
-
 using FluentAssertions;
 
 using Hangfire;
@@ -8,17 +6,17 @@ using Hangfire.States;
 
 using MeetingSystem.Business.Dtos;
 using MeetingSystem.Business.Jobs;
-using MeetingSystem.Business.Tests.Infrastructure;
 using MeetingSystem.Context;
 using MeetingSystem.Model;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-
-using Moq;
-using MockQueryable.Moq;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
+
+using MockQueryable.Moq;
+
+using Moq;
 
 namespace MeetingSystem.Business.Tests;
 
@@ -506,10 +504,10 @@ public class MeetingServiceTests
 
         mockUnitOfWork.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.FromResult(Mock.Of<IDbContextTransaction>()));
-        
+
         mockUnitOfWork.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Simulated commit failure"));
-        
+
         mockUnitOfWork.Setup(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 

@@ -1,12 +1,16 @@
 using Hangfire;
+
 using HealthChecks.UI.Client;
+
 using MeetingSystem.Api;
 using MeetingSystem.Api.Filters;
 using MeetingSystem.Business;
 using MeetingSystem.Business.Configuration;
 using MeetingSystem.Context;
+
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
+
 using Serilog;
 
 // ..........................................................................................
@@ -84,7 +88,7 @@ try
             "meeting-cleanup-job",
             service => service.CleanUpAsync(true, CancellationToken.None),
             hangfireSettings.CleanupJobCronExpression);
-    }    
+    }
 
     // ..........................................................................................
     // 7. Configure the HTTP Request Pipeline (Middleware)

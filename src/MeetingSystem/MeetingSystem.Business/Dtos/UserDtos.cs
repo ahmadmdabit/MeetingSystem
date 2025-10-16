@@ -1,5 +1,3 @@
-using MeetingSystem.Model;
-
 namespace MeetingSystem.Business.Dtos;
 
 /// <summary>

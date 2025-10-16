@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
+
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace MeetingSystem.Context;
 
@@ -83,7 +83,7 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
     }
 
     /// <inheritdoc />
-    public ValueTask<T?> GetByIdAsync(object id, CancellationToken cancellationToken = default) => 
+    public ValueTask<T?> GetByIdAsync(object id, CancellationToken cancellationToken = default) =>
         _dbSet.FindAsync([id], cancellationToken);
 
     /// <inheritdoc />

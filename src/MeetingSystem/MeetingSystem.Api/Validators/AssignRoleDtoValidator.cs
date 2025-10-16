@@ -1,4 +1,5 @@
 using FluentValidation;
+
 using MeetingSystem.Business.Dtos;
 
 namespace MeetingSystem.Api.Validators

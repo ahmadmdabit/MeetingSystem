@@ -1,15 +1,16 @@
-using System;
-using System.Threading.Tasks;
 using FluentAssertions;
+
+using Hangfire;
+using Hangfire.Common;
+using Hangfire.States;
+
 using MeetingSystem.Context;
 using MeetingSystem.Model;
-using Microsoft.Extensions.Logging;
-using Moq;
-using NUnit.Framework;
-using Hangfire;
-using Hangfire.States;
+
 using Microsoft.EntityFrameworkCore;
-using Hangfire.Common;
+using Microsoft.Extensions.Logging;
+
+using Moq;
 
 namespace MeetingSystem.Business.Tests;
 
@@ -30,7 +31,7 @@ public class AdminServiceTests
             .Options;
 
         _dbContext = new MeetingSystemDbContext(options);
-        
+
         await _dbContext.Database.EnsureDeletedAsync();
         await _dbContext.Database.MigrateAsync();
 
