@@ -1,59 +1,150 @@
+<p align="center">
+  <a href="#" target="_blank">
+    <img src="public/assets/images/meeting-system.png" width="200" alt="Project Logo">
+  </a>
+</p>
+
 # Meeting System UI
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.5.
+This project is the frontend for the Meeting System application, built with Angular 20 and TypeScript. It utilizes a fully standalone component architecture and follows modern reactive patterns.
 
-## Development server
+## Table of Contents
 
-To start a local development server, run:
+1.  [Tech Stack](#tech-stack)
+2.  [Project Structure](#project-structure)
+3.  [Getting Started](#getting-started)
+    *   [Prerequisites](#prerequisites)
+    *   [Installation](#installation)
+    *   [Environment Configuration](#environment-configuration)
+4.  [API Documentation](#api-documentation)
+5.  [Available Scripts](#available-scripts)
+6.  [Architectural Patterns](#architectural-patterns)
+7.  [Code Scaffolding](#code-scaffolding)
 
-```bash
-ng serve
+## Tech Stack
+
+*   **Framework**: [Angular](https://angular.dev/) v20.3.5
+*   **Language**: [TypeScript](https://www.typescriptlang.org/) v5.9.2
+*   **State Management**: [RxJS](https://rxjs.dev/) v7.8.0 (utilizing reactive view models)
+*   **Styling**: SCSS with a global variable-based theme structure
+*   **Package Manager**: [Yarn](https://yarnpkg.com/) v4.10.3
+*   **Unit Testing**: [Karma](https://karma-runner.github.io/) and [Jasmine](https://jasmine.github.io/)
+
+## Project Structure
+
+The source code is organized into a logical, feature-based structure to promote modularity and scalability.
+
+```
+src/
+├── app/
+│   ├── core/               # Core singleton services, models, and app-wide configuration.
+│   │   ├── api/            # Contains all services that communicate with the backend API.
+│   │   ├── auth/           # Holds authentication-related logic like interceptors and guards.
+│   │   ├── config/         # Application-wide configuration, such as the API base URL token.
+│   │   └── models/         # TypeScript interfaces for all data structures (e.g., Meeting, User).
+│   ├── features/           # Contains distinct business domains of the application.
+│   │   ├── auth/           # Components for login and registration pages.
+│   │   ├── dashboard/      # The main dashboard component displayed after login.
+│   │   ├── files/          # Components for file listing and uploading.
+│   │   ├── meetings/       # Components and routes for meeting management (list, detail, form).
+│   │   ├── user-profile/   # Components for managing the current user's profile.
+│   │   └── users/          # Components for listing and managing system users.
+│   ├── layout/             # Components that define the main page structure.
+│   │   └── main-layout/    # The primary authenticated layout with header, sidebar, and content outlet.
+│   └── shared/             # Reusable, presentation-focused components and utilities.
+│       ├── button/         # A reusable, styled button component.
+│       ├── card/           # A reusable card component for displaying content blocks.
+│       ├── input/          # A reusable, styled input component.
+│       └── pipes/          # Reusable data-transformation pipes (e.g., meetingStatus).
+├── assets/                 # Static assets like images, fonts, and icons.
+├── environments/           # Environment-specific configuration files (e.g., API URLs).
+└── styles/                 # Global application styles, variables, and themes.
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Getting Started
 
-## Code scaffolding
+Follow these instructions to set up and run the project locally.
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+### Prerequisites
 
-```bash
-ng generate component component-name
-```
+Ensure you have the following tools installed:
+*   **Node.js**: v18.x or later.
+*   **Yarn**: v4.x. The project is configured to use Yarn v4.10.3 via Corepack. Enable Corepack by running `corepack enable`.
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+### Installation
 
-```bash
-ng generate --help
-```
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd meeting-system-ui
+    ```
 
-## Building
+2.  **Install dependencies:**
+    This command will install all necessary packages defined in `package.json`.
+    ```bash
+    yarn install
+    ```
 
-To build the project run:
+### Environment Configuration
 
-```bash
-ng build
-```
+The application requires a running backend API. The URL for this API is configured via environment files.
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+1.  **Development:**
+    Open `src/environments/environment.ts` and ensure the `apiUrl` property points to your local backend server.
+    ```typescript
+    export const environment = {
+      production: false,
+      apiUrl: 'http://localhost:8080/api'
+    };
+    ```
 
-## Running unit tests
+2.  **Production:**
+    Before creating a production build, open `src/environments/environment.prod.ts` and set the `apiUrl` to your production backend URL.
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
+## API Documentation
 
-```bash
-ng test
-```
+This frontend application requires a corresponding backend API to function. The API contract is defined in the OpenAPI v3 specification located in this repository.
 
-## Running end-to-end tests
+*   **Specification File**: `docs/swagger.json`
 
-For end-to-end (e2e) testing, run:
+Before running the frontend, ensure the backend service is running and accessible at the URL configured in your `environment.ts` file.
 
-```bash
-ng e2e
-```
+## Available Scripts
 
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+The following scripts are available in `package.json` and can be run with `yarn <script-name>`.
 
-## Additional Resources
+*   **`yarn start`**
+    Runs the application in development mode. Navigate to `http://localhost:4200/`. The app will automatically reload if you change any of the source files.
 
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+*   **`yarn build`**
+    Builds the application for production. The build artifacts will be stored in the `dist/meeting-system-ui/` directory. This script uses the production environment configuration by default.
+
+*   **`yarn test`**
+    Executes the unit tests via Karma. This runs the tests once and generates a coverage report.
+    ```bash
+    yarn test --watch=false
+    ```
+
+*   **`yarn watch`**
+    Builds the application in development mode and watches for file changes to trigger incremental rebuilds.
+
+## Architectural Patterns
+
+*   **Standalone Components**: The application is built exclusively with Angular's standalone components, directives, and pipes, completely eliminating the need for `NgModules`.
+*   **Reactive View Models**: Components manage state using a reactive pattern. An observable `vm$` stream holds the component's state, which is consumed in the template using the `async` pipe. This improves performance and makes state management more predictable and declarative.
+*   **Global Error Handling**: An `HttpInterceptor` (`error.interceptor.ts`) is implemented to globally catch and handle API errors, providing consistent user feedback and centralized logic for handling authentication errors (e.g., 401 Unauthorized).
+*   **Authentication Flow**: Route access is protected using functional guards (`auth.guard.ts`). The `AuthService` handles JWT decoding and role-based access checks.
+
+## Code Scaffolding
+
+Leverage the Angular CLI to generate new application features.
+
+*   **Generate a new component:**
+    ```bash
+    ng generate component features/my-feature/my-component --standalone
+    ```
+
+*   **Generate a new service:**
+    ```bash
+    ng generate service core/api/my-service
+    ```
