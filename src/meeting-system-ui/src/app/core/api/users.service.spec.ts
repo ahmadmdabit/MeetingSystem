@@ -38,14 +38,16 @@ describe('UsersService', () => {
           firstName: 'John',
           lastName: 'Doe',
           email: 'john@example.com',
-          phone: '+1234567890'
+          phone: '+1234567890',
+          profilePictureUrl: ''
         },
         {
           id: 'user-2',
           firstName: 'Jane',
           lastName: 'Smith',
           email: 'jane@example.com',
-          phone: '+9876543210'
+          phone: '+9876543210',
+          profilePictureUrl: ''
         }
       ];
 

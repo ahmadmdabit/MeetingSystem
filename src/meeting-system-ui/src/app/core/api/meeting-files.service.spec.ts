@@ -37,13 +37,15 @@ describe('MeetingFilesService', () => {
           id: 'file-1',
           fileName: 'document.pdf',
           contentType: 'application/pdf',
-          sizeBytes: 1024000
+          sizeBytes: 1024000,
+          uploadedByUserId: 'user-1'
         },
         {
           id: 'file-2',
           fileName: 'presentation.pptx',
           contentType: 'application/vnd.ms-powerpoint',
-          sizeBytes: 2048000
+          sizeBytes: 2048000,
+          uploadedByUserId: 'user-1'
         }
       ];
 
@@ -82,13 +84,15 @@ describe('MeetingFilesService', () => {
           id: 'file-1',
           fileName: 'file1.txt',
           contentType: 'text/plain',
-          sizeBytes: 8
+          sizeBytes: 8,
+          uploadedByUserId: 'user-1'
         },
         {
           id: 'file-2',
           fileName: 'file2.txt',
           contentType: 'text/plain',
-          sizeBytes: 8
+          sizeBytes: 8,
+          uploadedByUserId: 'user-1'
         }
       ];
 
@@ -111,7 +115,8 @@ describe('MeetingFilesService', () => {
         id: 'file-1',
         fileName: 'document.pdf',
         contentType: 'application/pdf',
-        sizeBytes: 7
+        sizeBytes: 7,
+        uploadedByUserId: 'user-1'
       }];
 
       service.uploadFiles(meetingId, mockFile).subscribe(files => {
@@ -121,7 +126,7 @@ describe('MeetingFilesService', () => {
       const req = httpController.expectOne(`${baseUrl}/${meetingId}/files`);
       req.flush(mockResponse);
     });
-    
+
     // Add test for upload with 413 Content Too Large response
     it('should handle file upload failure with content too large', () => {
       const meetingId = 'meeting-123';

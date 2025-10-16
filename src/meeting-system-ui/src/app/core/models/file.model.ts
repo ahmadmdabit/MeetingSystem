@@ -3,6 +3,7 @@ export interface AppFile {
   fileName?: string;
   contentType?: string;
   sizeBytes: number;
+  uploadedByUserId: string;
 }
 
 export interface PresignedUrl {

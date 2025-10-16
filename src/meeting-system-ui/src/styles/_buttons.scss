@@ -1,0 +1,66 @@
+// 1. Use the modern module system to load variables and the built-in color module.
+@use 'variables' as *;
+@use 'sass:color';
+
+.btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  vertical-align: middle;
+  user-select: none;
+  border: 1px solid transparent;
+  padding: $spacing-sm $spacing-base;
+  font-size: $font-size-sm;
+  line-height: 1.5;
+  border-radius: $border-radius;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+  }
+}
+
+.btn-primary {
+  color: $text-color-white;
+  background-color: $primary-color;
+  border-color: $primary-color;
+  &:hover:not(:disabled) {
+    background-color: $primary-color-hover;
+    // 2. Replace darken() with the modern, recommended color.adjust()
+    border-color: color.adjust($primary-color, $lightness: -5%);
+  }
+}
+
+.btn-outline {
+  color: $primary-color;
+  background-color: transparent;
+  border: 1px solid $primary-color;
+  &:hover:not(:disabled) {
+    background-color: $primary-color;
+    color: $text-color-white;
+  }
+}
+
+.btn-danger {
+  color: $text-color-white;
+  background-color: $danger-color;
+  border-color: $danger-color;
+  &:hover:not(:disabled) {
+    background-color: $danger-color-hover;
+    // 3. Replace darken()
+    border-color: color.adjust($danger-color, $lightness: -5%);
+  }
+}
+
+.btn-success {
+  color: $text-color-white;
+  background-color: $success-color;
+  border-color: $success-color;
+  &:hover:not(:disabled) {
+    background-color: $success-color-hover;
+    // 4. Replace darken()
+    border-color: color.adjust($success-color, $lightness: -5%);
+  }
+}

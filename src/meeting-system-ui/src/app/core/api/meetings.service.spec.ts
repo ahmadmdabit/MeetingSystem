@@ -175,7 +175,7 @@ describe('MeetingsService', () => {
 
       // FIX: An Observable<void> doesn't emit a value.
       // The success is implied by the 'next' callback being hit without error.
-      service.deleteMeeting(meetingId).subscribe(response => {
+      service.cancelMeeting(meetingId).subscribe(response => {
         expect(response).toBeNull();
       });
 
@@ -183,12 +183,12 @@ describe('MeetingsService', () => {
       expect(req.request.method).toBe('DELETE');
       req.flush(null); // This completes the observable.
     });
-    
+
     // Add test for delete meeting with 403 Forbidden response
     it('should handle meeting deletion failure with forbidden', () => {
       const meetingId = 'meeting-123';
 
-      service.deleteMeeting(meetingId).subscribe({
+      service.cancelMeeting(meetingId).subscribe({
         error: (error) => {
           expect(error.status).toBe(403);
         }

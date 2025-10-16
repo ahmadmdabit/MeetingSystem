@@ -29,6 +29,7 @@ export interface UpdateMeeting {
   description?: string;
   startAt: string;
   endAt: string;
+  participantEmails?: string[];
 }
 
 export interface AddParticipant {

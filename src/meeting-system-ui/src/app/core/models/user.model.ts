@@ -4,6 +4,13 @@ export interface UserProfile {
   lastName?: string;
   email?: string;
   phone?: string;
+  profilePictureUrl?: string;
+  roles?: Role[];
+}
+
+export interface Role {
+  id: string;
+  name: string;
 }
 
 export interface UpdateUserProfile {

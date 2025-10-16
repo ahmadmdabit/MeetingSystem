@@ -26,7 +26,7 @@ export class MeetingsService {
     return this.http.put<Meeting>(`${this.baseUrl}/${id}`, payload);
   }
 
-  deleteMeeting(id: string): Observable<void> {
+  cancelMeeting(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 

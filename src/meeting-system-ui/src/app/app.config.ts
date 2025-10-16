@@ -5,6 +5,7 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
 import { API_CONFIG, DEFAULT_API_CONFIG } from './core/config/api.config';
 import { authInterceptor } from './core/auth/auth.interceptor';
+import { errorInterceptor } from './features/auth/interceptors/error.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -12,6 +13,6 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideRouter(routes),
     { provide: API_CONFIG, useValue: DEFAULT_API_CONFIG },
-    provideHttpClient(withInterceptors([authInterceptor]))
+    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor]))
   ]
 };

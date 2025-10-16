@@ -29,16 +29,17 @@ describe('UserProfileService', () => {
 
   afterEach(() => httpController.verify());
 
+  const mockProfile: UserProfile = {
+      id: 'user-123',
+      firstName: 'John',
+      lastName: 'Doe',
+      email: 'john.doe@example.com',
+      phone: '+1234567890',
+      profilePictureUrl: 'http://example.com/pic.jpg'
+    };
+
   describe('getMe', () => {
     it('should retrieve current user profile', () => {
-      const mockProfile: UserProfile = {
-        id: 'user-123',
-        firstName: 'John',
-        lastName: 'Doe',
-        email: 'john.doe@example.com',
-        phone: '+1234567890'
-      };
-
       service.getMe().subscribe(profile => {
         expect(profile).toEqual(mockProfile);
         expect(profile.email).toBe('john.doe@example.com');

@@ -1,8 +1,10 @@
+import { jwtDecode } from 'jwt-decode';
 import { inject, Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { catchError, Observable, of, tap } from 'rxjs';
 import { API_CONFIG } from '../config/api.config';
 import { AuthResponse, Login, RegisterUser } from '../models/auth.model';
+import { JwtPayload } from '../models/jwt-payload.model';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -27,15 +29,63 @@ export class AuthService {
   }
 
   logout(): Observable<void> {
-    // Clear the token immediately for a responsive user experience.
+    // 1. Get the token BEFORE you clear it.
+    const token = this.getToken();
+
+    // 2. Clear the token immediately for instant UX feedback.
     this.clearToken();
-    // The server call is now for backend session cleanup.
-    // The client is already logged out.
-    return this.http.post<void>(`${this.baseUrl}/logout`, {});
+
+    // 3. If there was no token to begin with, there's nothing to do on the server.
+    if (!token) {
+      return of(undefined); // Return a completed observable.
+    }
+
+    // 4. Manually create the Authorization header with the token we saved.
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
+
+    // 5. Make the API call with the explicit headers, bypassing the interceptor's logic.
+    return this.http.post<void>(`${this.baseUrl}/logout`, {}, { headers }).pipe(
+      // 6. Gracefully handle errors. If the API call fails (e.g., network down),
+      // the user is already logged out on the client. We don't want to show an error.
+      catchError(error => {
+        console.error('Logout API call failed, but user is logged out on client.', error);
+        return of(undefined); // Swallow the error and complete the stream.
+      })
+    );
   }
 
   getToken(): string | null {
     return localStorage.getItem(this.tokenKey);
+  }
+
+  // FIX: Refine this method to return a clean, mapped object
+  public getCurrentUser(): { id: string; email: string; roles: string[] } | null {
+    const token = this.getToken();
+    if (!token) {
+      return null;
+    }
+    try {
+      const decoded = jwtDecode<JwtPayload>(token);
+      const roleClaim = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
+
+      return {
+        id: decoded.sub, // Map 'sub' to 'id'
+        email: decoded.email,
+        // Ensure roles are always returned as an array
+        roles: Array.isArray(roleClaim) ? roleClaim : [roleClaim],
+      };
+    } catch (error) {
+      console.error("Failed to decode JWT", error);
+      return null;
+    }
+  }
+
+  // FIX: Update isAdmin to use the new, reliable getCurrentUser method
+  public isAdmin(): boolean {
+    const user = this.getCurrentUser();
+    return user?.roles.includes('Admin') ?? false;
   }
 
   private saveToken(token: string): void {

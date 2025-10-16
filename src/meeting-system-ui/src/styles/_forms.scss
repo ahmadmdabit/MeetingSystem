@@ -1,0 +1,43 @@
+// 1. Use the modern module system
+@use 'variables' as *;
+@use 'sass:color';
+
+.form-group {
+  margin-bottom: ($spacing-base * 1.5);
+}
+
+label {
+  display: block;
+  margin-bottom: $spacing-sm;
+  font-weight: 500;
+  color: $text-color-light;
+}
+
+.form-control {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid $border-color;
+  border-radius: $border-radius;
+  font-size: $font-size-base;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+
+  &:focus {
+    // 2. Replace lighten() with the modern, recommended color.adjust()
+    border-color: color.adjust($primary-color, $lightness: 25%);
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba($primary-color, 0.25);
+  }
+
+  &.is-invalid {
+    border-color: $danger-color;
+  }
+}
+
+.invalid-feedback {
+  display: block;
+  width: 100%;
+  margin-top: 0.25rem;
+  font-size: $font-size-sm;
+  color: $danger-color;
+}
