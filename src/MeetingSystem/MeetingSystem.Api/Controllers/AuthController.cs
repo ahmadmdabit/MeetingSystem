@@ -30,7 +30,7 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(object), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register([FromBody] RegisterUserDto dto, CancellationToken cancellationToken)
+    public async Task<IActionResult> Register([FromForm] RegisterUserDto dto, CancellationToken cancellationToken)
     {
         var (success, message) = await _authService.RegisterAsync(dto, true, cancellationToken).ConfigureAwait(false);
         if (!success)

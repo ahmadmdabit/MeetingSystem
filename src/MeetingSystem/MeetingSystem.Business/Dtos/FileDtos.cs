@@ -7,4 +7,5 @@ namespace MeetingSystem.Business.Dtos;
 /// <param name="FileName">The original name of the file.</param>
 /// <param name="ContentType">The MIME type of the file (e.g., "application/pdf").</param>
 /// <param name="SizeBytes">The original size of the file in bytes.</param>
-public record FileDto(Guid Id, string FileName, string ContentType, long SizeBytes);
+/// <param name="UploadedByUserId">The User who uploaded the file.</param>
+public record FileDto(Guid Id, string FileName, string ContentType, long SizeBytes, Guid UploadedByUserId);

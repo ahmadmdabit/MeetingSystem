@@ -56,7 +56,7 @@ public class MeetingCleanupService : IMeetingCleanupService
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (!meetingsToClean.Any())
+        if (meetingsToClean.Count == 0)
         {
             _logger.LogInformation("No meetings found for cleanup.");
             return;

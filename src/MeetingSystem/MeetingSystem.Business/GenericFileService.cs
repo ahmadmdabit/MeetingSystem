@@ -20,9 +20,10 @@ public interface IGenericFileService
     /// </summary>
     /// <param name="bucketName">The name of the bucket.</param>
     /// <param name="objectKey">The key of the object.</param>
+    /// <param name="expiry">The expiration duration in seconds.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
     /// <returns>A short-lived, publicly accessible URL.</returns>
-    Task<string> GetPresignedUrlAsync(string bucketName, string objectKey, CancellationToken cancellationToken);
+    Task<string> GetPresignedUrlAsync(string bucketName, string objectKey, int expiry = 300, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Uploads a file stream to the specified bucket.
@@ -32,7 +33,7 @@ public interface IGenericFileService
     /// <param name="file">The file to upload.</param>
     /// <param name="allowCompression">A flag to indicate if compression should be applied for large files.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    Task UploadObjectAsync(string bucketName, string objectKey, IFormFile file, bool allowCompression, CancellationToken cancellationToken);
+    Task UploadObjectAsync(string bucketName, string objectKey, IFormFile file, bool allowCompression, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Removes an object from a bucket.
@@ -40,7 +41,7 @@ public interface IGenericFileService
     /// <param name="bucketName">The name of the bucket.</param>
     /// <param name="objectKey">The key of the object to remove.</param>
     /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    Task RemoveObjectAsync(string bucketName, string objectKey, CancellationToken cancellationToken);
+    Task RemoveObjectAsync(string bucketName, string objectKey, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -64,7 +65,7 @@ public class GenericFileService : IGenericFileService
     }
 
     /// <inheritdoc />
-    public Task<string> GetPresignedUrlAsync(string bucketName, string objectKey, CancellationToken cancellationToken)
+    public Task<string> GetPresignedUrlAsync(string bucketName, string objectKey, int expiry = 300, CancellationToken cancellationToken = default)
     {
         var publicUri = new Uri(_minioSettings.PublicEndpoint);
         // Create a temporary client configured with the public-facing endpoint for URL generation.
@@ -77,13 +78,13 @@ public class GenericFileService : IGenericFileService
         var args = new PresignedGetObjectArgs()
             .WithBucket(bucketName)
             .WithObject(objectKey)
-            .WithExpiry(300); // 5 minutes
+            .WithExpiry(expiry);
 
         return publicMinioClient.PresignedGetObjectAsync(args);
     }
 
     /// <inheritdoc />
-    public async Task UploadObjectAsync(string bucketName, string objectKey, IFormFile file, bool allowCompression, CancellationToken cancellationToken)
+    public async Task UploadObjectAsync(string bucketName, string objectKey, IFormFile file, bool allowCompression, CancellationToken cancellationToken = default)
     {
         var bucketExistsArgs = new BucketExistsArgs().WithBucket(bucketName);
         if (!await _minioClient.BucketExistsAsync(bucketExistsArgs, cancellationToken).ConfigureAwait(false))
@@ -123,7 +124,7 @@ public class GenericFileService : IGenericFileService
     }
 
     /// <inheritdoc />
-    public async Task RemoveObjectAsync(string bucketName, string objectKey, CancellationToken cancellationToken)
+    public async Task RemoveObjectAsync(string bucketName, string objectKey, CancellationToken cancellationToken = default)
     {
         try
         {

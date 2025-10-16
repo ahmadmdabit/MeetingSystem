@@ -269,31 +269,84 @@ public class MeetingService : IMeetingService
     /// <inheritdoc />
     public async Task<(MeetingDto? Meeting, string? ErrorMessage)> UpdateMeetingAsync(Guid meetingId, UpdateMeetingDto dto, Guid userId, CancellationToken cancellationToken = default)
     {
-        var meeting = await _unitOfWork.Meetings
-            .Find(m => m.Id == meetingId)
-            .FirstOrDefaultAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        if (meeting == null)
+        await _unitOfWork.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
-            _logger.LogWarning("Update failed: Meeting {MeetingId} not found.", meetingId);
-            return (null, "Meeting not found");
-        }
+            var meeting = await _unitOfWork.Meetings
+                .Find(m => m.Id == meetingId)
+                .Include(m => m.Participants)
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-        if (meeting.OrganizerId != userId)
+            if (meeting == null)
+            {
+                _logger.LogWarning("Update failed: Meeting {MeetingId} not found.", meetingId);
+                // No transaction has been committed, so we can safely return without an explicit rollback.
+                // The UnitOfWork's Dispose will handle the uncommitted transaction.
+                return (null, "Meeting not found");
+            }
+
+            if (meeting.OrganizerId != userId)
+            {
+                _logger.LogWarning("Update failed: User {UserId} is not the organizer of meeting {MeetingId}.", userId, meetingId);
+                return (null, "User is not authorized to update this meeting.");
+            }
+
+            // === Step 1: Update Core Meeting Properties ===
+            meeting.Name = dto.Name;
+            meeting.Description = dto.Description;
+            meeting.StartAt = dto.StartAt.ToUniversalTime();
+            meeting.EndAt = dto.EndAt.ToUniversalTime();
+
+            // === Step 2: Synchronize Participant List ===
+            // Treat a null collection as an empty one for synchronization purposes.
+            var desiredParticipantEmails = new HashSet<string>(dto.ParticipantEmails ?? Enumerable.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+
+            // Get the IDs of the users for the desired state
+            var desiredUsers = await _unitOfWork.Users
+                .Find(u => desiredParticipantEmails.Contains(u.Email))
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var desiredUserIds = new HashSet<Guid>(desiredUsers);
+
+            // Get the IDs of the current participants
+            var currentUserIds = new HashSet<Guid>(meeting.Participants.Select(p => p.UserId));
+
+            // Calculate who to remove. CRITICAL: Always ensure the organizer is never removed from the participant list.
+            var userIdsToRemove = currentUserIds.Except(desiredUserIds).Where(id => id != meeting.OrganizerId).ToList();
+            if (userIdsToRemove.Count != 0)
+            {
+                var participantsToRemove = meeting.Participants
+                    .Where(p => userIdsToRemove.Contains(p.UserId))
+                    .ToList();
+
+                _unitOfWork.MeetingParticipants.RemoveRange(participantsToRemove);
+            }
+
+            // Calculate who to add
+            var userIdsToAdd = desiredUserIds.Except(currentUserIds).ToList();
+            if (userIdsToAdd.Count != 0)
+            {
+                var participantsToAdd = userIdsToAdd.Select(id => new MeetingParticipant
+                {
+                    MeetingId = meetingId,
+                    UserId = id,
+                    Role = "Participant"
+                });
+                _unitOfWork.MeetingParticipants.AddRange(participantsToAdd);
+            }
+
+            await _unitOfWork.CommitTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            return (await GetMeetingByIdAsync(meetingId, userId, cancellationToken).ConfigureAwait(false), null);
+        }
+        catch (Exception ex)
         {
-            _logger.LogWarning("Update failed: User {UserId} is not the organizer of meeting {MeetingId}.", userId, meetingId);
-            return (null, "User is not authorized to update this meeting.");
+            _logger.LogError(ex, "Failed to complete meeting update transaction for MeetingId {MeetingId}. Rolling back.", meetingId);
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
+            throw;
         }
-
-        meeting.Name = dto.Name;
-        meeting.Description = dto.Description;
-        meeting.StartAt = dto.StartAt.ToUniversalTime();
-        meeting.EndAt = dto.EndAt.ToUniversalTime();
-
-        await _unitOfWork.CompleteAsync(cancellationToken).ConfigureAwait(false);
-
-        return (await GetMeetingByIdAsync(meetingId, userId, cancellationToken).ConfigureAwait(false), null);
     }
 
     /// <inheritdoc />

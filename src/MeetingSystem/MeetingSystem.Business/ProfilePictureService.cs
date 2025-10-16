@@ -188,6 +188,6 @@ public class ProfilePictureService : IProfilePictureService
             return null;
         }
 
-        return await _genericFileService.GetPresignedUrlAsync(_bucketName, user.ProfilePictureUrl, cancellationToken).ConfigureAwait(false);
+        return await _genericFileService.GetPresignedUrlAsync(_bucketName, user.ProfilePictureUrl, 86400, cancellationToken).ConfigureAwait(false);
     }
 }

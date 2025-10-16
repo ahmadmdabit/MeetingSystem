@@ -1,13 +1,13 @@
-﻿using System.Collections.Generic;
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Hangfire;
-using MeetingSystem.Context;
+
 using MeetingSystem.Business.Dtos;
+using MeetingSystem.Context;
 using MeetingSystem.Model;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -157,7 +157,7 @@ public class AuthService : IAuthService
                 await _unitOfWork.RollbackTransactionAsync(cancellationToken).ConfigureAwait(false);
                 return (false, "System configuration error: Default role not found.");
             }
-            
+
             _unitOfWork.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = userRole.Id });
 
             if (commit)
@@ -209,14 +209,47 @@ public class AuthService : IAuthService
     /// <inheritdoc />
     public async Task<UserProfileDto?> GetCurrentUserProfileAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await _unitOfWork.Users
+        var userProfile = await _unitOfWork.Users
             .Find(u => u.Id == userId)
+            // 1. Eagerly load the related UserRoles and then the Role for each UserRole.
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
             .AsNoTracking()
-            .Select(u => new UserProfileDto(u.Id, u.FirstName, u.LastName, u.Email, u.Phone))
+            // 2. Project directly into the DTO within the query. This is the most efficient way.
+            .Select(user => new UserProfileDto(
+                user.Id,
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Phone,
+                // 3. The ProfilePictureUrl is already loaded, so no extra service call is needed.
+                user.ProfilePictureUrl,
+                user.UserRoles.Select(ur => new RoleDto(
+                    ur.Role!.Id,
+                    ur.Role.Name
+                )).ToList()
+            ))
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return user;
+        // 4. If a profile picture exists, generate the pre-signed URL.
+        if (userProfile != null && !string.IsNullOrEmpty(userProfile.ProfilePictureUrl))
+        {
+            try
+            {
+                var presignedUrl = await _profilePictureService.GetUrlAsync(userProfile.Id, cancellationToken).ConfigureAwait(false);
+                // 5. Return a new record with the updated URL. Records are immutable.
+                return userProfile with { ProfilePictureUrl = presignedUrl };
+            }
+            catch (Exception exc)
+            {
+                _logger.LogWarning(exc, "Profile picture URL generation failed for user {UserId}. Returning profile without the picture URL.", userProfile.Id);
+                // Return the profile DTO but with a null URL, as the URL generation failed.
+                return userProfile with { ProfilePictureUrl = null };
+            }
+        }
+
+        return userProfile; // Returns the profile (with a null URL if no picture) or null if the user was not found.
     }
 
     /// <inheritdoc />
@@ -246,15 +279,65 @@ public class AuthService : IAuthService
     /// <inheritdoc />
     public async Task<List<UserProfileDto>> GetAllUsersAsync(CancellationToken cancellationToken = default)
     {
-        var users = await _unitOfWork.Users
+        // 1. Execute a single, comprehensive query.
+        var userProfiles = await _unitOfWork.Users
             .GetAll()
+            .Include(u => u.UserRoles)
+                .ThenInclude(ur => ur.Role)
             .AsNoTracking()
             .OrderBy(u => u.FirstName)
-            .Select(u => new UserProfileDto(u.Id, u.FirstName, u.LastName, u.Email, u.Phone))
+            .Select(user => new UserProfileDto(
+                user.Id,
+                user.FirstName,
+                user.LastName,
+                user.Email,
+                user.Phone,
+                user.ProfilePictureUrl, // The object key, not the final URL yet
+                user.UserRoles.Select(ur => new RoleDto(
+                    ur.Role!.Id,
+                    ur.Role.Name
+                )).ToList()
+            ))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        return users;
+        // 2. Efficiently generate pre-signed URLs for only the users who have pictures.
+        if (userProfiles.Count != 0)
+        {
+            // Create a list of tasks to run in parallel.
+            var urlGenerationTasks = userProfiles
+                .Where(p => !string.IsNullOrEmpty(p.ProfilePictureUrl))
+                .Select(async profile =>
+                {
+                    try
+                    {
+                        var presignedUrl = await _profilePictureService.GetUrlAsync(profile.Id, cancellationToken).ConfigureAwait(false);
+                        // Return a tuple of the original profile and the new URL
+                        return (Profile: profile, Url: presignedUrl);
+                    }
+                    catch (Exception exc)
+                    {
+                        _logger.LogWarning(exc, "Profile picture URL generation failed for user {UserId} during batch operation.", profile.Id);
+                        return (Profile: profile, Url: (string?)null);
+                    }
+                });
+
+            // Await all the URL generation tasks.
+            var results = await Task.WhenAll(urlGenerationTasks).ConfigureAwait(false);
+
+            // 3. Create a lookup dictionary for efficient updates.
+            var urlLookup = results.ToDictionary(r => r.Profile.Id, r => r.Url);
+
+            // 4. Create the final list with the updated URLs.
+            // This is faster than finding and updating in the original list.
+            return userProfiles.ConvertAll(p =>
+                urlLookup.TryGetValue(p.Id, out var url)
+                ? p with { ProfilePictureUrl = url }
+                : p
+            );
+        }
+
+        return userProfiles; // Return the (potentially empty) list.
     }
 
     /// <summary>

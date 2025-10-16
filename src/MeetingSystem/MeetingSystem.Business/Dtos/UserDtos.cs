@@ -1,4 +1,4 @@
-using System;
+using MeetingSystem.Model;
 
 namespace MeetingSystem.Business.Dtos;
 
@@ -10,7 +10,9 @@ public record UserProfileDto(
     string FirstName,
     string LastName,
     string Email,
-    string Phone
+    string Phone,
+    string? ProfilePictureUrl,
+    ICollection<RoleDto>? Roles
 );
 
 /// <summary>
@@ -20,4 +22,12 @@ public record UpdateUserProfileDto(
     string FirstName,
     string LastName,
     string Phone
+);
+
+/// <summary>
+/// DTO for returning the role information of the authenticated user.
+/// </summary>
+public record RoleDto(
+    Guid Id,
+    string Name
 );

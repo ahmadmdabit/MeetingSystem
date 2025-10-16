@@ -67,7 +67,7 @@ public class GenericFileServiceTests
         // A full integration test is required to validate the URL's correctness.
 
         // Act
-        var result = await _fileService.GetPresignedUrlAsync("test-bucket", "test-key", CancellationToken.None);
+        var result = await _fileService.GetPresignedUrlAsync("test-bucket", "test-key", 300, CancellationToken.None);
 
         // Assert
         result.Should().NotBeNullOrEmpty();

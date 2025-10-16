@@ -143,7 +143,7 @@ public class ProfilePictureServiceTests
         await _dbContext.SaveChangesAsync();
 
         var expectedUrl = "http://presigned-url";
-        _genericFileServiceMock.Setup(s => s.GetPresignedUrlAsync("profile-pics", "picture-key", It.IsAny<CancellationToken>()))
+        _genericFileServiceMock.Setup(s => s.GetPresignedUrlAsync("profile-pics", "picture-key", 86400, It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedUrl);
 
         // Act

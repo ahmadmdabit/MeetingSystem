@@ -283,7 +283,7 @@ namespace MeetingSystem.Business.Tests
             _dbContext.MeetingParticipants.Add(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id });
             _dbContext.MeetingFiles.Add(file);
             await _dbContext.SaveChangesAsync();
-            _genericFileServiceMock.Setup(s => s.GetPresignedUrlAsync("meeting-files", "the-object-key", It.IsAny<CancellationToken>()))
+            _genericFileServiceMock.Setup(s => s.GetPresignedUrlAsync("meeting-files", "the-object-key", 300, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("http://presigned-url.com/the-object-key");
             var (url, errorMessage) = await _meetingFileService.GetFileDownloadUrlAsync(meeting.Id, file.Id, organizer.Id);
             errorMessage.Should().BeNull();

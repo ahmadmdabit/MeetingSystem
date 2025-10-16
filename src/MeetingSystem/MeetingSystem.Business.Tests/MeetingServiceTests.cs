@@ -82,7 +82,7 @@ public class MeetingServiceTests
         var organizer = await CreateUserAsync("org@test.com");
         var meeting = await CreateMeetingAsync(organizer.Id);
         var nonOrganizer = await CreateUserAsync("nonorg@test.com");
-        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), ["org@test.com", "nonorg@test.com"]);
 
         // Act
         var (updatedMeeting, errorMessage) = await _meetingService.UpdateMeetingAsync(meeting.Id, dto, nonOrganizer.Id, CancellationToken.None);
@@ -100,7 +100,7 @@ public class MeetingServiceTests
     {
         // Arrange
         var user = await CreateUserAsync("user@test.com");
-        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
+        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), ["org@test.com", "nonorg@test.com"]);
         var nonExistentMeetingId = Guid.NewGuid();
 
         // Act
@@ -251,7 +251,7 @@ public class MeetingServiceTests
         _dbContext.MeetingParticipants.Add(new MeetingParticipant { MeetingId = meeting.Id, UserId = organizer.Id });
         await _dbContext.SaveChangesAsync();
 
-        var dto = new UpdateMeetingDto("Updated Name", "Updated Desc", DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(1));
+        var dto = new UpdateMeetingDto("Updated Name", "Updated Desc", DateTime.UtcNow.AddDays(1), DateTime.UtcNow.AddDays(1).AddHours(1), ["org@test.com", "nonorg@test.com"]);
 
         // Act
         var (updatedMeeting, errorMessage) = await _meetingService.UpdateMeetingAsync(meeting.Id, dto, organizer.Id, CancellationToken.None);
@@ -497,18 +497,22 @@ public class MeetingServiceTests
         // Arrange
         var organizer = await CreateUserAsync("org@test.com");
         var meeting = await CreateMeetingAsync(organizer.Id);
-        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1));
-
-        meeting.Name = dto.Name;
-        meeting.Description = dto.Description;
-        meeting.StartAt = dto.StartAt;
-        meeting.EndAt = dto.EndAt;
+        var dto = new UpdateMeetingDto("New Name", "New Desc", DateTime.UtcNow, DateTime.UtcNow.AddHours(1), new[] { "org@test.com", "nonorg@test.com" });
 
         var mockUnitOfWork = new Mock<IUnitOfWork>();
         mockUnitOfWork.Setup(u => u.Meetings).Returns(_unitOfWork.Meetings);
-        mockUnitOfWork.Setup(u => u.CompleteAsync(It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new Exception("Simulated commit failure"));
+        mockUnitOfWork.Setup(u => u.Users).Returns(_unitOfWork.Users);
+        mockUnitOfWork.Setup(u => u.MeetingParticipants).Returns(_unitOfWork.MeetingParticipants);
+
+        mockUnitOfWork.Setup(u => u.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.FromResult(Mock.Of<IDbContextTransaction>()));
         
+        mockUnitOfWork.Setup(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Simulated commit failure"));
+        
+        mockUnitOfWork.Setup(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
         var meetingService = new MeetingService(mockUnitOfWork.Object, _backgroundJobClientMock.Object, _loggerMock.Object);
 
         // Act
@@ -516,6 +520,7 @@ public class MeetingServiceTests
 
         // Assert
         await act.Should().ThrowAsync<Exception>().WithMessage("Simulated commit failure");
+        mockUnitOfWork.Verify(u => u.RollbackTransactionAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>

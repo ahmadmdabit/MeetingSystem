@@ -504,7 +504,110 @@ public class AuthServiceTests
 
     #endregion Profile Tests
 
-    #region Helper Methods
+    #region Coverage Tests
+
+    [Test]
+    public async Task GetCurrentUserProfileAsync_WhenPictureServiceThrows_ReturnsProfileWithNullUrlAndLogsWarning()
+    {
+        // Arrange
+        var user = await CreateUserAsync("pic-error@test.com");
+        user.ProfilePictureUrl = "some-key";
+        await _dbContext.SaveChangesAsync();
+
+        _profilePictureServiceMock.Setup(s => s.GetUrlAsync(user.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Simulated MinIO failure"));
+
+        // Act
+        var profile = await _authService.GetCurrentUserProfileAsync(user.Id);
+
+        // Assert
+        profile.Should().NotBeNull();
+        profile!.ProfilePictureUrl.Should().BeNull();
+
+        _loggerMock.Verify(
+            logger => logger.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Profile picture URL generation failed")), 
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task GetAllUsersAsync_WhenPictureServiceThrowsForOneUser_ReturnsAllUsersWithOneNullUrl()
+    {
+        // Arrange
+        var userWithPic = await CreateUserAsync("user1@test.com");
+        userWithPic.ProfilePictureUrl = "pic1";
+        var userWithFailingPic = await CreateUserAsync("user2@test.com");
+        userWithFailingPic.ProfilePictureUrl = "pic2-fails";
+        await _dbContext.SaveChangesAsync();
+
+        _profilePictureServiceMock.Setup(s => s.GetUrlAsync(userWithPic.Id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("http://signed-url.com/pic1");
+        _profilePictureServiceMock.Setup(s => s.GetUrlAsync(userWithFailingPic.Id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Simulated MinIO failure"));
+
+        // Act
+        var result = await _authService.GetAllUsersAsync();
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.First(u => u.Id == userWithPic.Id).ProfilePictureUrl.Should().Be("http://signed-url.com/pic1");
+        result.First(u => u.Id == userWithFailingPic.Id).ProfilePictureUrl.Should().BeNull();
+
+        _loggerMock.Verify(
+            logger => logger.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("batch operation")),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task GetAllUsersAsync_WhenNoUsersExist_ReturnsEmptyList()
+    {
+        // Act
+        var result = await _authService.GetAllUsersAsync();
+
+        // Assert
+        result.Should().NotBeNull();
+        result.Should().BeEmpty();
+    }
+
+    [Test]
+    public async Task RegisterAsync_WhenCommitIsFalse_DoesNotCommitTransaction()
+    {
+        // Arrange
+        var mockUnitOfWork = new Mock<IUnitOfWork>();
+        mockUnitOfWork.Setup(u => u.Users).Returns(_unitOfWork.Users);
+        mockUnitOfWork.Setup(u => u.Roles).Returns(_unitOfWork.Roles);
+        mockUnitOfWork.Setup(u => u.UserRoles).Returns(_unitOfWork.UserRoles);
+
+        var authService = new AuthService(
+            mockUnitOfWork.Object,
+            _passwordHasherMock.Object,
+            _backgroundJobClientMock.Object,
+            _emailServiceMock.Object,
+            _profilePictureServiceMock.Object,
+            _configurationMock.Object,
+            _loggerMock.Object);
+
+        var dto = new RegisterUserDto("No", "Commit", "nocommit@example.com", "123", "Password123!", null);
+        await SeedRoles();
+        _passwordHasherMock.Setup(p => p.HashPassword(It.IsAny<User>(), dto.Password)).Returns("hashed_password");
+
+        // Act
+        var (success, _) = await authService.RegisterAsync(dto, commit: false);
+
+        // Assert
+        success.Should().BeTrue();
+        mockUnitOfWork.Verify(u => u.CompleteAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+        mockUnitOfWork.Verify(u => u.CommitTransactionAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
 
     private async Task<User> CreateUserAsync(string email)
     {

@@ -9,25 +9,27 @@ namespace MeetingSystem.Business.Dtos;
 /// <param name="EndAt">The scheduled end time of the meeting in UTC.</param>
 /// <param name="ParticipantEmails">An optional collection of emails for users to invite to the meeting.</param>
 public record CreateMeetingDto(
-    string Name, 
-    string Description, 
-    DateTime StartAt, 
+    string Name,
+    string Description,
+    DateTime StartAt,
     DateTime EndAt,
     ICollection<string>? ParticipantEmails
 );
 
 /// <summary>
-/// Represents the data required to update an existing meeting's core details.
+/// Represents the data required to update an existing meeting's core details and participant list.
 /// </summary>
 /// <param name="Name">The updated name or title of the meeting.</param>
 /// <param name="Description">The updated description of the meeting.</param>
 /// <param name="StartAt">The updated start time of the meeting in UTC.</param>
 /// <param name="EndAt">The updated end time of the meeting in UTC.</param>
+/// <param name="ParticipantEmails">The definitive collection of emails for users who should be in the meeting (excluding the organizer).</param>
 public record UpdateMeetingDto(
-    string Name, 
-    string Description, 
-    DateTime StartAt, 
-    DateTime EndAt
+    string Name,
+    string Description,
+    DateTime StartAt,
+    DateTime EndAt,
+    ICollection<string>? ParticipantEmails
 );
 
 /// <summary>

@@ -132,7 +132,7 @@ public class MeetingFileService : IMeetingFileService
                 await _genericFileService.UploadObjectAsync(_bucketName, meetingFile.MinioObjectKey, file, true, cancellationToken).ConfigureAwait(false);
 
                 _unitOfWork.MeetingFiles.Add(meetingFile);
-                uploadedFiles.Add(new FileDto(meetingFile.Id, meetingFile.FileName, meetingFile.ContentType, meetingFile.SizeBytes));
+                uploadedFiles.Add(new FileDto(meetingFile.Id, meetingFile.FileName, meetingFile.ContentType, meetingFile.SizeBytes, meetingFile.UploadedByUserId));
             }
 
             if (commit)
@@ -229,7 +229,7 @@ public class MeetingFileService : IMeetingFileService
 
         var files = await _unitOfWork.MeetingFiles
             .Find(f => f.MeetingId == meetingId)
-            .Select(f => new FileDto(f.Id, f.FileName, f.ContentType, f.SizeBytes))
+            .Select(f => new FileDto(f.Id, f.FileName, f.ContentType, f.SizeBytes, f.UploadedByUserId))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -262,7 +262,7 @@ public class MeetingFileService : IMeetingFileService
             return (null, "File not found.");
         }
 
-        var url = await _genericFileService.GetPresignedUrlAsync(_bucketName, file.MinioObjectKey, cancellationToken).ConfigureAwait(false);
+        var url = await _genericFileService.GetPresignedUrlAsync(_bucketName, file.MinioObjectKey, 300, cancellationToken).ConfigureAwait(false);
         return (url, null);
     }
 }
