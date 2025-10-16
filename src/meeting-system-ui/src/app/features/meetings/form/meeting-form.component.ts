@@ -346,6 +346,10 @@ export class MeetingFormComponent implements OnInit {
   }
 
   private formatDateTimeForInput(dateString: string): string {
+    // The API provides a UTC date string (e.g., ending in 'Z').
+    // new Date() correctly parses this into a Date object representing that point in time.
+    // The getFullYear(), getHours(), etc. methods then automatically return the date/time
+    // components in the browser's local timezone, which is what the datetime-local input requires.
     const date = new Date(dateString);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -373,6 +377,8 @@ export class MeetingFormComponent implements OnInit {
       const payload: UpdateMeeting = {
         name: formValue.name!,
         description: formValue.description!,
+        // The form value is a string like 'YYYY-MM-DDTHH:mm', which new Date() interprets as local time.
+        // .toISOString() then correctly converts this local time to its UTC equivalent string for the API.
         startAt: new Date(formValue.startAt!).toISOString(),
         endAt: new Date(formValue.endAt!).toISOString(),
         participantEmails: participantEmails

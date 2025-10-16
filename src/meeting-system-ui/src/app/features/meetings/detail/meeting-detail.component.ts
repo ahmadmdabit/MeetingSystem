@@ -47,6 +47,7 @@ import { MeetingStatusPipe } from '../../../shared/pipes/meeting-status-pipe';
 
                 <div class="info-item">
                   <label>Start Time:</label>
+                  <!-- The DatePipe automatically converts the UTC date string from the API to the user's local browser time. -->
                   <p>{{ meeting.startAt | date: 'medium' }}</p>
                 </div>
 

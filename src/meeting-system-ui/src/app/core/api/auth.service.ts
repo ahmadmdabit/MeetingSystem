@@ -68,6 +68,13 @@ export class AuthService {
     }
     try {
       const decoded = jwtDecode<JwtPayload>(token);
+
+      // Check if the token is expired. exp is in seconds, Date.now() is in milliseconds.
+      if (decoded.exp * 1000 < Date.now()) {
+        console.error("JWT has expired.");
+        return null;
+      }
+
       const roleClaim = decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'];
 
       return {

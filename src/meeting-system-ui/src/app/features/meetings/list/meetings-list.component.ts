@@ -55,8 +55,9 @@ export type MeetingCategory = keyof CategorizedMeetings;
 
                     <div class="meeting-details">
                       <p><strong>Description:</strong> {{ meeting.description || 'N/A' }}</p>
-                      <p><strong>Start:</strong> {{ meeting.startAt | date: 'medium' }}</p>
-                      <p><strong>End:</strong> {{ meeting.endAt | date: 'medium' }}</p>
+                      <!-- The DatePipe automatically converts the UTC date string from the API to the user's local browser time. -->
+                      <p><strong>Start:</strong> {{ meeting.startAt | date: 'medium' : 'Europe/Istanbul' }}</p>
+                      <p><strong>End:</strong> {{ meeting.endAt | date: 'medium' : 'Europe/Istanbul' }}</p>
                       <p><strong>Participants:</strong> {{ meeting.participants?.length || 0 }}</p>
                     </div>
 
